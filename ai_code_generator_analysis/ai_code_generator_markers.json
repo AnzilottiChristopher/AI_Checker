@@ -1,0 +1,629 @@
+{
+  ".claude": [
+    {
+      "repo_name": "vinta/pangu.js",
+      "repo_url": "https://github.com/vinta/pangu.js",
+      "file_path": ".claude/TODO.md",
+      "file_url": "https://github.com/vinta/pangu.js/blob/e4d52bbc8bd8f70c3216a5806d7f496e0f16fb8d/.claude/TODO.md",
+      "stars": 4569,
+      "description": "Opinionated paranoid text spacing in JavaScript",
+      "owner_type": "User",
+      "owner_login": "vinta"
+    },
+    {
+      "repo_name": "shinyoshiaki/werift-webrtc",
+      "repo_url": "https://github.com/shinyoshiaki/werift-webrtc",
+      "file_path": ".claude/memory.md",
+      "file_url": "https://github.com/shinyoshiaki/werift-webrtc/blob/1c16f141b313cb967a8fffe885000528341855ba/.claude/memory.md",
+      "stars": 549,
+      "description": "WebRTC Implementation for TypeScript (Node.js), includes ICE/DTLS/SCTP/RTP/SRTP/WEBM/MP4",
+      "owner_type": "User",
+      "owner_login": "shinyoshiaki"
+    },
+    {
+      "repo_name": "darvid/python-hyperscan",
+      "repo_url": "https://github.com/darvid/python-hyperscan",
+      "file_path": ".claude/CLAUDE.md",
+      "file_url": "https://github.com/darvid/python-hyperscan/blob/960877c5c3f5c9a7f6c4da9c50b866b5ffa3e45f/.claude/CLAUDE.md",
+      "stars": 182,
+      "description": "🐍 A CPython extension for the Hyperscan regular expression matching library.",
+      "owner_type": "User",
+      "owner_login": "darvid"
+    },
+    {
+      "repo_name": "disler/benchy",
+      "repo_url": "https://github.com/disler/benchy",
+      "file_path": ".claude/commands/prime.md",
+      "file_url": "https://github.com/disler/benchy/blob/31e83770263ceee244718201567ab6d5d46b9569/.claude/commands/prime.md",
+      "stars": 430,
+      "description": "Benchmarks you can feel",
+      "owner_type": "User",
+      "owner_login": "disler"
+    },
+    {
+      "repo_name": "nikolovlazar/dotfiles",
+      "repo_url": "https://github.com/nikolovlazar/dotfiles",
+      "file_path": ".claude/COMMANDS.md",
+      "file_url": "https://github.com/nikolovlazar/dotfiles/blob/b24980e94171c2b5d8bfe47a5362132e7bcf702c/.claude/COMMANDS.md",
+      "stars": 277,
+      "description": "My ever-evolving dotfiles. Optimized for JavaScript/TypeScript/Web Development. Managed with stow.",
+      "owner_type": "User",
+      "owner_login": "nikolovlazar"
+    },
+    {
+      "repo_name": "nicholasjclark/mvgam",
+      "repo_url": "https://github.com/nicholasjclark/mvgam",
+      "file_path": ".claude/commands/bug-find.md",
+      "file_url": "https://github.com/nicholasjclark/mvgam/blob/c31de18159bdcb902ab6b8d32033187ee08869e7/.claude/commands/bug-find.md",
+      "stars": 158,
+      "description": "{mvgam} R 📦 to fit Dynamic Bayesian Generalized Additive Models for multivariate modeling and forecasting",
+      "owner_type": "User",
+      "owner_login": "nicholasjclark"
+    },
+    {
+      "repo_name": "gemwalletcom/core",
+      "repo_url": "https://github.com/gemwalletcom/core",
+      "file_path": ".claude/commands/push_pr.md",
+      "file_url": "https://github.com/gemwalletcom/core/blob/a8b9a185b64487578ec4f7a08baed4518e8fbab6/.claude/commands/push_pr.md",
+      "stars": 97,
+      "description": "Gem Wallet Core library in Rust",
+      "owner_type": "Organization",
+      "owner_login": "gemwalletcom"
+    },
+    {
+      "repo_name": "pgflow-dev/pgflow",
+      "repo_url": "https://github.com/pgflow-dev/pgflow",
+      "file_path": ".claude/nx_mcp.md",
+      "file_url": "https://github.com/pgflow-dev/pgflow/blob/3c8d94bd988524db5a8c72f37ecad16f33630dd0/.claude/nx_mcp.md",
+      "stars": 123,
+      "description": "Postgres-centric workflow engine with deep integration with Supabase",
+      "owner_type": "Organization",
+      "owner_login": "pgflow-dev"
+    },
+    {
+      "repo_name": "cmdaltctr/claude-gemini-mcp-slim",
+      "repo_url": "https://github.com/cmdaltctr/claude-gemini-mcp-slim",
+      "file_path": ".claude/commands/d.md",
+      "file_url": "https://github.com/cmdaltctr/claude-gemini-mcp-slim/blob/79f2303f1cc875853853755cd3659f0f71a4dc3f/.claude/commands/d.md",
+      "stars": 105,
+      "description": "Lightweight MCP integration bringing Google's Gemini AI capabilities to Claude Code with 1M+ token context window, smart model selection, and powerful code analysis tools",
+      "owner_type": "User",
+      "owner_login": "cmdaltctr"
+    },
+    {
+      "repo_name": "kako-jun/diffx",
+      "repo_url": "https://github.com/kako-jun/diffx",
+      "file_path": ".claude/tasks.md",
+      "file_url": "https://github.com/kako-jun/diffx/blob/342fdd1fb1cfbf56de3c09807a293a128ad916fc/.claude/tasks.md",
+      "stars": 57,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "kako-jun"
+    }
+  ],
+  ".cursor": [
+    {
+      "repo_name": "appsmithorg/appsmith",
+      "repo_url": "https://github.com/appsmithorg/appsmith",
+      "file_path": ".cursor/README.md",
+      "file_url": "https://github.com/appsmithorg/appsmith/blob/b4efa7268402c22c5abc433083e0186469e6e8bc/.cursor/README.md",
+      "stars": 37536,
+      "description": "Platform to build admin panels, internal tools, and dashboards. Integrates with 25+ databases and any API.",
+      "owner_type": "Organization",
+      "owner_login": "appsmithorg"
+    },
+    {
+      "repo_name": "cameroncooke/XcodeBuildMCP",
+      "repo_url": "https://github.com/cameroncooke/XcodeBuildMCP",
+      "file_path": ".cursor/BUGBOT.md",
+      "file_url": "https://github.com/cameroncooke/XcodeBuildMCP/blob/008a1dcb6e282745b11cd5460c879f4ab6a16bf7/.cursor/BUGBOT.md",
+      "stars": 2136,
+      "description": "A Model Context Protocol (MCP) server that provides Xcode-related tools for integration with AI assistants and other MCP clients.",
+      "owner_type": "User",
+      "owner_login": "cameroncooke"
+    },
+    {
+      "repo_name": "iannuttall/mcp-boilerplate",
+      "repo_url": "https://github.com/iannuttall/mcp-boilerplate",
+      "file_path": ".cursor/rules/mcp-server.mdc",
+      "file_url": "https://github.com/iannuttall/mcp-boilerplate/blob/6b8cd1fb2de9627a5c08c97f4724e0f45005ed0d/.cursor/rules/mcp-server.mdc",
+      "stars": 852,
+      "description": "A remote Cloudflare MCP server boilerplate with user authentication and Stripe for paid tools.",
+      "owner_type": "User",
+      "owner_login": "iannuttall"
+    },
+    {
+      "repo_name": "SiriusScan/Sirius",
+      "repo_url": "https://github.com/SiriusScan/Sirius",
+      "file_path": ".cursor/rules/mcp.md",
+      "file_url": "https://github.com/SiriusScan/Sirius/blob/341745c7c4a038bcd5f7ae56bb7301b0e49929da/.cursor/rules/mcp.md",
+      "stars": 535,
+      "description": null,
+      "owner_type": "Organization",
+      "owner_login": "SiriusScan"
+    },
+    {
+      "repo_name": "Metta-AI/metta",
+      "repo_url": "https://github.com/Metta-AI/metta",
+      "file_path": ".cursor/docs.md",
+      "file_url": "https://github.com/Metta-AI/metta/blob/e9ce5f2b7c98587f8e63a1bcedf07e8f53457a9e/.cursor/docs.md",
+      "stars": 70,
+      "description": "A reinforcement learning codebase focusing on the emergence of cooperation and alignment in multi-agent AI systems.",
+      "owner_type": "Organization",
+      "owner_login": "Metta-AI"
+    },
+    {
+      "repo_name": "dosco/graphjin",
+      "repo_url": "https://github.com/dosco/graphjin",
+      "file_path": ".cursor/README.md",
+      "file_url": "https://github.com/dosco/graphjin/blob/0968acde69cea216be443e202e22fb983df4a9e7/.cursor/README.md",
+      "stars": 2978,
+      "description": "GraphJin - Build NodeJS / GO APIs in 5 minutes not weeks",
+      "owner_type": "User",
+      "owner_login": "dosco"
+    },
+    {
+      "repo_name": "T1nker-1220/UltraContextAI",
+      "repo_url": "https://github.com/T1nker-1220/UltraContextAI",
+      "file_path": ".cursor/memories.md",
+      "file_url": "https://github.com/T1nker-1220/UltraContextAI/blob/24768bb73a050e8671be289f3e5225f2bd134aaf/.cursor/memories.md",
+      "stars": 179,
+      "description": "Hire/Contact me: marquezjohnnathanieljade@gmail.com https://forum.cursor.com/t/rules-for-ultra-context-memories-lessons-scratchpad-with-plan-and-act-modes/48792/22?u=t1nker-1220",
+      "owner_type": "User",
+      "owner_login": "T1nker-1220"
+    },
+    {
+      "repo_name": "FreePayPOS/merchant-app",
+      "repo_url": "https://github.com/FreePayPOS/merchant-app",
+      "file_path": ".cursor/scratchpad.md",
+      "file_url": "https://github.com/FreePayPOS/merchant-app/blob/75945f102cddbcc94a17741ef3dad129da192be9/.cursor/scratchpad.md",
+      "stars": 152,
+      "description": "Source code for running the FreePay merchant software",
+      "owner_type": "Organization",
+      "owner_login": "FreePayPOS"
+    },
+    {
+      "repo_name": "henryhawke/mcp-titan",
+      "repo_url": "https://github.com/henryhawke/mcp-titan",
+      "file_path": ".cursor/rules/memory.mdc",
+      "file_url": "https://github.com/henryhawke/mcp-titan/blob/1e2638f9aaeef950ee944c31b2fff8e97e1ddcf9/.cursor/rules/memory.mdc",
+      "stars": 65,
+      "description": "This tool is a cutting-edge memory engine that blends real-time learning, persistent three-tier context awareness, and seamless plug-n-play LLM integration to continuously evolve and enrich your AI’s intelligence. ",
+      "owner_type": "User",
+      "owner_login": "henryhawke"
+    },
+    {
+      "repo_name": "script-kit/app",
+      "repo_url": "https://github.com/script-kit/app",
+      "file_path": ".cursor/GUIDE.md",
+      "file_url": "https://github.com/script-kit/app/blob/2a1c4c4bf206b84a4cc4d7187281723357f346a3/.cursor/GUIDE.md",
+      "stars": 84,
+      "description": null,
+      "owner_type": "Organization",
+      "owner_login": "script-kit"
+    }
+  ],
+  ".copilot": [
+    {
+      "repo_name": "harvard-edtech/dce-reactkit",
+      "repo_url": "https://github.com/harvard-edtech/dce-reactkit",
+      "file_path": ".copilot/instructions.md",
+      "file_url": "https://github.com/harvard-edtech/dce-reactkit/blob/c9c2be8cd9e6cfca2e347e2884641b708c589342/.copilot/instructions.md",
+      "stars": 5,
+      "description": "A collections of simple tools and UI elements for quickly and easily building React-based apps.",
+      "owner_type": "Organization",
+      "owner_login": "harvard-edtech"
+    },
+    {
+      "repo_name": "seasketch/next",
+      "repo_url": "https://github.com/seasketch/next",
+      "file_path": ".copilot/context.md",
+      "file_url": "https://github.com/seasketch/next/blob/8c6edf580737faa78501e7e210c4658f095d505a/.copilot/context.md",
+      "stars": 7,
+      "description": "A modernization version of the SeaSketch platform, released in 2022.",
+      "owner_type": "Organization",
+      "owner_login": "seasketch"
+    },
+    {
+      "repo_name": "kaidoj/google-maps-jobs-search-extension",
+      "repo_url": "https://github.com/kaidoj/google-maps-jobs-search-extension",
+      "file_path": ".copilot/product-requirements.md",
+      "file_url": "https://github.com/kaidoj/google-maps-jobs-search-extension/blob/865f53b5f90b5c73574c8ea3da653d771dfb3429/.copilot/product-requirements.md",
+      "stars": 16,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "kaidoj"
+    },
+    {
+      "repo_name": "jkalis-MS/CodeOptimizationsSampleApp",
+      "repo_url": "https://github.com/jkalis-MS/CodeOptimizationsSampleApp",
+      "file_path": ".copilot/playbook.md",
+      "file_url": "https://github.com/jkalis-MS/CodeOptimizationsSampleApp/blob/c6948a87de071f492d0caf77f29726d20a28c592/.copilot/playbook.md",
+      "stars": 3,
+      "description": "This app is intended to set-up the end to end demo for App Insights Code Optimizations in about 15 minutes.",
+      "owner_type": "User",
+      "owner_login": "jkalis-MS"
+    },
+    {
+      "repo_name": "hrirkslab/git-time-machine",
+      "repo_url": "https://github.com/hrirkslab/git-time-machine",
+      "file_path": ".copilot/README.md",
+      "file_url": "https://github.com/hrirkslab/git-time-machine/blob/b8425e73c9d8c70cf76d53ed5869335b8e1fdcaa/.copilot/README.md",
+      "stars": 4,
+      "description": "A Rust-based MCP (Model Context Protocol) server that provides git history insights to AI assistants like GitHub Copilot. This server exposes tools and context providers that allow LLMs to reason about the evolution of your codebase.",
+      "owner_type": "User",
+      "owner_login": "hrirkslab"
+    },
+    {
+      "repo_name": "uktrade/redbox",
+      "repo_url": "https://github.com/uktrade/redbox",
+      "file_path": ".copilot/phases/build.sh",
+      "file_url": "https://github.com/uktrade/redbox/blob/5f6104f660bddf5e857e4500ec6b9610b19959c5/.copilot/phases/build.sh",
+      "stars": 1,
+      "description": null,
+      "owner_type": "Organization",
+      "owner_login": "uktrade"
+    },
+    {
+      "repo_name": "Prateek-1kumar/crapkut",
+      "repo_url": "https://github.com/Prateek-1kumar/crapkut",
+      "file_path": ".copilot/.agent",
+      "file_url": "https://github.com/Prateek-1kumar/crapkut/blob/0389913d80a9c0707198d40cc8292080a2213527/.copilot/.agent",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "Prateek-1kumar"
+    },
+    {
+      "repo_name": "hkevin01/ruby-on-rails-demo",
+      "repo_url": "https://github.com/hkevin01/ruby-on-rails-demo",
+      "file_path": ".copilot/copilot-ignore.txt",
+      "file_url": "https://github.com/hkevin01/ruby-on-rails-demo/blob/ef7361e384041e155d5537c151a19dad1973238f/.copilot/copilot-ignore.txt",
+      "stars": 0,
+      "description": "A modern, full-featured blog application built with Ruby on Rails showcasing popular integrations and best practices.",
+      "owner_type": "User",
+      "owner_login": "hkevin01"
+    },
+    {
+      "repo_name": "srkjaffri007/jobintv1",
+      "repo_url": "https://github.com/srkjaffri007/jobintv1",
+      "file_path": ".copilot/llms.txt",
+      "file_url": "https://github.com/srkjaffri007/jobintv1/blob/63a1e5295f89df3695a1a85d234a42fb8ac78ba9/.copilot/llms.txt",
+      "stars": 0,
+      "description": null,
+      "owner_type": "Organization",
+      "owner_login": "srkjaffri007"
+    },
+    {
+      "repo_name": "jasonjgeiger/VibeBoilerPlater",
+      "repo_url": "https://github.com/jasonjgeiger/VibeBoilerPlater",
+      "file_path": ".copilot/templates/hook.ts",
+      "file_url": "https://github.com/jasonjgeiger/VibeBoilerPlater/blob/9538c3cbadae382b440f3d8b652d6bc482784b7e/.copilot/templates/hook.ts",
+      "stars": 0,
+      "description": "Boilerplate for vibe with web app code with Cursor or VS Code+Github Copilot",
+      "owner_type": "User",
+      "owner_login": "jasonjgeiger"
+    }
+  ],
+  ".tabnine": [
+    {
+      "repo_name": "rozghrom/my_dot_files",
+      "repo_url": "https://github.com/rozghrom/my_dot_files",
+      "file_path": ".tabnine/.active",
+      "file_url": "https://github.com/rozghrom/my_dot_files/blob/145ebb2d99b34f0376f76aa62569e65771660375/.tabnine/.active",
+      "stars": 0,
+      "description": "My dot files and what you need to install them",
+      "owner_type": "User",
+      "owner_login": "rozghrom"
+    }
+  ],
+  ".codewhisperer": [],
+  ".codesnippets": [],
+  ".kite": [
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/user",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/user",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/installid",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/installid",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/message.log",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/message.log",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/logs/client.log",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/logs/client.log",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/logs/client.log.2021-11-10_03-35-12-PM.bak",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/logs/client.log.2021-11-10_03-35-12-PM.bak",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/editors.json",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/editors.json",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/logs/client.log.2021-11-12_04-53-51-AM.bak",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/logs/client.log.2021-11-12_04-53-51-AM.bak",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/session.json",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/session.json",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/logs/client.log.2021-11-10_03-38-35-PM.bak",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/logs/client.log.2021-11-10_03-38-35-PM.bak",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    },
+    {
+      "repo_name": "louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "repo_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries",
+      "file_path": ".kite/license.json",
+      "file_url": "https://github.com/louiseadore0808/Python-Functions-Files-and-Dictionaries/blob/02bc18435036356fa129b78a7a887e5fd9c31bd1/.kite/license.json",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "louiseadore0808"
+    }
+  ],
+  ".ai": [
+    {
+      "repo_name": "fictionco/fiction",
+      "repo_url": "https://github.com/fictionco/fiction",
+      "file_path": ".ai/core.md",
+      "file_url": "https://github.com/fictionco/fiction/blob/2b80d7d8d2b6193a72b289baa7f9d534545468cd/.ai/core.md",
+      "stars": 1446,
+      "description": "(Join Waiting List) Personal Marketing Platform. A powerful platform for your online identity.",
+      "owner_type": "Organization",
+      "owner_login": "fictionco"
+    },
+    {
+      "repo_name": "TimeWarpEngineering/timewarp-state",
+      "repo_url": "https://github.com/TimeWarpEngineering/timewarp-state",
+      "file_path": ".ai/Index.md",
+      "file_url": "https://github.com/TimeWarpEngineering/timewarp-state/blob/ff139b1a427714ac85b4a6408552a8b26da8ea12/.ai/Index.md",
+      "stars": 598,
+      "description": "A Blazor State management library by TimeWarp.",
+      "owner_type": "Organization",
+      "owner_login": "TimeWarpEngineering"
+    },
+    {
+      "repo_name": "We-Hack-Studio/nuts",
+      "repo_url": "https://github.com/We-Hack-Studio/nuts",
+      "file_path": ".ai/prd.md",
+      "file_url": "https://github.com/We-Hack-Studio/nuts/blob/de39730db2480204bf1656377b86a317ff3b984d/.ai/prd.md",
+      "stars": 356,
+      "description": "坚果量化 - 数字货币量化交易系统。",
+      "owner_type": "Organization",
+      "owner_login": "We-Hack-Studio"
+    },
+    {
+      "repo_name": "RayFernando1337/MLX-Auto-Subtitled-Video-Generator",
+      "repo_url": "https://github.com/RayFernando1337/MLX-Auto-Subtitled-Video-Generator",
+      "file_path": ".ai/README.md",
+      "file_url": "https://github.com/RayFernando1337/MLX-Auto-Subtitled-Video-Generator/blob/8ef2c9b59da6ead67c16252c68004caaf8896ecf/.ai/README.md",
+      "stars": 430,
+      "description": "Generate accurate transcripts using Apple's MLX framework",
+      "owner_type": "User",
+      "owner_login": "RayFernando1337"
+    },
+    {
+      "repo_name": "JocysCom/FocusLogger",
+      "repo_url": "https://github.com/JocysCom/FocusLogger",
+      "file_path": ".ai/ReadMe.md",
+      "file_url": "https://github.com/JocysCom/FocusLogger/blob/65fd47ab96ca4501603e15e852f209353aa26938/.ai/ReadMe.md",
+      "stars": 156,
+      "description": "Find out which process or program is taking the window focus. In-game controls could temporary stop responding if other program steals the focus.",
+      "owner_type": "Organization",
+      "owner_login": "JocysCom"
+    },
+    {
+      "repo_name": "przeprogramowani/ai-rules-builder",
+      "repo_url": "https://github.com/przeprogramowani/ai-rules-builder",
+      "file_path": ".ai/auth-spec.md",
+      "file_url": "https://github.com/przeprogramowani/ai-rules-builder/blob/f5b472cf01d5e2731e7749b905c2ac1d05366acf/.ai/auth-spec.md",
+      "stars": 169,
+      "description": "Generate \"Rules for AI\". Quickly ✨",
+      "owner_type": "User",
+      "owner_login": "przeprogramowani"
+    },
+    {
+      "repo_name": "lastbackend/toolkit",
+      "repo_url": "https://github.com/lastbackend/toolkit",
+      "file_path": ".ai/examples.md",
+      "file_url": "https://github.com/lastbackend/toolkit/blob/fa578fc1b88276159e25b125d770e606314f3f85/.ai/examples.md",
+      "stars": 31,
+      "description": "Toolkit is a framework for distributed systems",
+      "owner_type": "Organization",
+      "owner_login": "lastbackend"
+    },
+    {
+      "repo_name": "orangebread/wrinkl",
+      "repo_url": "https://github.com/orangebread/wrinkl",
+      "file_path": ".ai/project.md",
+      "file_url": "https://github.com/orangebread/wrinkl/blob/7919328613d079947a936d0f935d4e70e1ce16ec/.ai/project.md",
+      "stars": 31,
+      "description": "Wrinkl is an AI context management system with ledger-based feature tracking for better AI-assisted development",
+      "owner_type": "User",
+      "owner_login": "orangebread"
+    },
+    {
+      "repo_name": "Malnati/agent-flow-ddl",
+      "repo_url": "https://github.com/Malnati/agent-flow-ddl",
+      "file_path": ".ai/source.txt",
+      "file_url": "https://github.com/Malnati/agent-flow-ddl/blob/9a9e61c48b53a8ee389844c41ff09688ab9d26c0/.ai/source.txt",
+      "stars": 0,
+      "description": "Gerador de modelos de bancos de dados relacionais.",
+      "owner_type": "User",
+      "owner_login": "Malnati"
+    },
+    {
+      "repo_name": "ai-mode/ai-mode",
+      "repo_url": "https://github.com/ai-mode/ai-mode",
+      "file_path": ".ai/memory.md",
+      "file_url": "https://github.com/ai-mode/ai-mode/blob/4613c0cfc58e505a85aade2604d22b146d25431f/.ai/memory.md",
+      "stars": 5,
+      "description": "AI mode for Emacs",
+      "owner_type": "Organization",
+      "owner_login": "ai-mode"
+    }
+  ],
+  ".openai": [
+    {
+      "repo_name": "GDD-Nantes/LLM4SchemaOrg",
+      "repo_url": "https://github.com/GDD-Nantes/LLM4SchemaOrg",
+      "file_path": ".openai/API.txt",
+      "file_url": "https://github.com/GDD-Nantes/LLM4SchemaOrg/blob/426f74eaa05f16cec0946e685acd879371eb045d/.openai/API.txt",
+      "stars": 7,
+      "description": null,
+      "owner_type": "Organization",
+      "owner_login": "GDD-Nantes"
+    },
+    {
+      "repo_name": "asshat1981ar/synapse-tao",
+      "repo_url": "https://github.com/asshat1981ar/synapse-tao",
+      "file_path": ".openai/po_system.md",
+      "file_url": "https://github.com/asshat1981ar/synapse-tao/blob/b21ff844f3d0e39a8ccdd806bf8d81df2ff4de6f/.openai/po_system.md",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "asshat1981ar"
+    },
+    {
+      "repo_name": "mafatah/time-flow-admin",
+      "repo_url": "https://github.com/mafatah/time-flow-admin",
+      "file_path": ".openai/setup.sh",
+      "file_url": "https://github.com/mafatah/time-flow-admin/blob/a3973595c31699b0343819e3b0699484e4e4ea13/.openai/setup.sh",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "mafatah"
+    },
+    {
+      "repo_name": "doggy8088/Duotify.OpenAI.CLI",
+      "repo_url": "https://github.com/doggy8088/Duotify.OpenAI.CLI",
+      "file_path": ".openai/translate.json",
+      "file_url": "https://github.com/doggy8088/Duotify.OpenAI.CLI/blob/0fd0c81a612d69c03ecdfbd4cefc3dd5c85d24d9/.openai/translate.json",
+      "stars": 25,
+      "description": "Duotify.OpenAI.CLI 應用程式是一個跨平台的 CLI 命令列工具，用於與 OpenAI 相容的 API 互動。",
+      "owner_type": "User",
+      "owner_login": "doggy8088"
+    },
+    {
+      "repo_name": "builtin-path/path",
+      "repo_url": "https://github.com/builtin-path/path",
+      "file_path": ".openai/.txt",
+      "file_url": "https://github.com/builtin-path/path/blob/4e00a2ad5afb88e8b5b642478e9a9c8d253c9cf5/.openai/.txt",
+      "stars": 1,
+      "description": "auto-config",
+      "owner_type": "User",
+      "owner_login": "builtin-path"
+    },
+    {
+      "repo_name": "jordieke-nl/forbidden-words-checker-2",
+      "repo_url": "https://github.com/jordieke-nl/forbidden-words-checker-2",
+      "file_path": ".openai/actions.yaml",
+      "file_url": "https://github.com/jordieke-nl/forbidden-words-checker-2/blob/d1282251e5a53fbc265b0ed9e85ad7d951ec2d07/.openai/actions.yaml",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "jordieke-nl"
+    },
+    {
+      "repo_name": "SyedAliAsif/chatGPTMR_HCI",
+      "repo_url": "https://github.com/SyedAliAsif/chatGPTMR_HCI",
+      "file_path": ".openai/auth.json",
+      "file_url": "https://github.com/SyedAliAsif/chatGPTMR_HCI/blob/207d5340c0a746f0477e9ebbe4a6a777f888aba0/.openai/auth.json",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "SyedAliAsif"
+    },
+    {
+      "repo_name": "KG-NINJA/openai-to-z-fuwa",
+      "repo_url": "https://github.com/KG-NINJA/openai-to-z-fuwa",
+      "file_path": ".openai/openai.json",
+      "file_url": "https://github.com/KG-NINJA/openai-to-z-fuwa/blob/cd3428bd984f79de52848817f221f4b92edf65a8/.openai/openai.json",
+      "stars": 1,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "KG-NINJA"
+    },
+    {
+      "repo_name": "asshat1981ar/synapse-tao",
+      "repo_url": "https://github.com/asshat1981ar/synapse-tao",
+      "file_path": ".openai/qa_system.md",
+      "file_url": "https://github.com/asshat1981ar/synapse-tao/blob/b21ff844f3d0e39a8ccdd806bf8d81df2ff4de6f/.openai/qa_system.md",
+      "stars": 0,
+      "description": null,
+      "owner_type": "User",
+      "owner_login": "asshat1981ar"
+    },
+    {
+      "repo_name": "builtin-path/builtin-path",
+      "repo_url": "https://github.com/builtin-path/builtin-path",
+      "file_path": ".openai/.txt",
+      "file_url": "https://github.com/builtin-path/builtin-path/blob/aa2f3c2254914a1dfea0b944c2822c6446722399/.openai/.txt",
+      "stars": 1,
+      "description": "Config files for my profile.",
+      "owner_type": "User",
+      "owner_login": "builtin-path"
+    }
+  ],
+  ".aicode": []
+}

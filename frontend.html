@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Code Generator Marker Backend</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ccc;
+        }
+        .status-indicator.online {
+            background-color: #4CAF50;
+        }
+        .status-indicator.offline {
+            background-color: #f44336;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .danger {
+            background-color: #dc3545;
+        }
+        .danger:hover {
+            background-color: #c82333;
+        }
+        .success {
+            background-color: #28a745;
+        }
+        .success:hover {
+            background-color: #218838;
+        }
+        .endpoint-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .endpoint-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .filter-controls {
+            margin: 10px 0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .results {
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .result-item {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .error {
+            color: #f44336;
+            background-color: #ffebee;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success-message {
+            color: #4CAF50;
+            background-color: #e8f5e8;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .server-command {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            border: 1px solid #ddd;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Code Generator Marker Backend</h1>
+    
+    <!-- Server Management -->
+    <div class="container">
+        <h2>Server Management</h2>
+        <div class="server-status">
+            <div id="statusIndicator" class="status-indicator offline"></div>
+            <span id="statusText">Server Offline</span>
+        </div>
+        
+        <div class="server-command">
+            <strong>To start the server, run this command in your terminal:</strong><br>
+            <code>uvicorn backend:app --reload</code>
+        </div>
+        
+        <button onclick="checkServerStatus()">Check Server Status</button>
+        <button onclick="openAPIDocs()" id="docsBtn" disabled>Open API Documentation</button>
+    </div>
+
+    <!-- Data Import -->
+    <div class="container">
+        <h2>Data Import</h2>
+        <p>Import your AI code generator marker data from JSON files.</p>
+        <button onclick="importMarkers()" id="importBtn" disabled>Import Default JSON</button>
+        <button onclick="importCustomFile()" id="importCustomBtn" disabled>Import Custom File</button>
+        <div id="importResult"></div>
+    </div>
+
+    <!-- Query Endpoints -->
+    <div class="container">
+        <h2>Query Data</h2>
+        
+        <!-- List All Hits -->
+        <div class="endpoint-section">
+            <h3>All Marker Hits</h3>
+            <button onclick="getAllHits()" id="allHitsBtn" disabled>Get All Hits</button>
+            <div class="filter-controls">
+                <label>Filter by Marker:</label>
+                <select id="markerFilter">
+                    <option value="">All Markers</option>
+                </select>
+                <label>Filter by Owner Type:</label>
+                <select id="ownerTypeFilter">
+                    <option value="">All Types</option>
+                    <option value="User">User</option>
+                    <option value="Organization">Organization</option>
+                </select>
+                <label>Filter by Owner:</label>
+                <input type="text" id="ownerLoginFilter" placeholder="Enter owner login">
+                <button onclick="getFilteredHits()" id="filterBtn" disabled>Apply Filters</button>
+            </div>
+            <div id="hitsResult" class="results"></div>
+        </div>
+
+        <!-- List Markers -->
+        <div class="endpoint-section">
+            <h3>Available Markers</h3>
+            <button onclick="getMarkers()" id="markersBtn" disabled>Get All Markers</button>
+            <div id="markersResult" class="results"></div>
+        </div>
+
+        <!-- List Owner Types -->
+        <div class="endpoint-section">
+            <h3>Owner Types</h3>
+            <button onclick="getOwnerTypes()" id="ownerTypesBtn" disabled>Get Owner Types</button>
+            <div id="ownerTypesResult" class="results"></div>
+        </div>
+
+        <!-- List Owner Logins -->
+        <div class="endpoint-section">
+            <h3>Owner Logins</h3>
+            <button onclick="getOwnerLogins()" id="ownerLoginsBtn" disabled>Get Owner Logins</button>
+            <div id="ownerLoginsResult" class="results"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+        let serverOnline = false;
+
+        // Check if server is running
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.status === 'ok') {
+                        serverOnline = true;
+                        updateServerStatus(true);
+                        enableButtons();
+                    } else {
+                        serverOnline = false;
+                        updateServerStatus(false);
+                    }
+                } else {
+                    serverOnline = false;
+                    updateServerStatus(false);
+                }
+            } catch (error) {
+                serverOnline = false;
+                updateServerStatus(false);
+            }
+        }
+
+        function updateServerStatus(online) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            
+            if (online) {
+                indicator.className = 'status-indicator online';
+                statusText.textContent = 'Server Online';
+            } else {
+                indicator.className = 'status-indicator offline';
+                statusText.textContent = 'Server Offline';
+            }
+        }
+
+        function enableButtons() {
+            const buttons = ['docsBtn', 'importBtn', 'importCustomBtn', 'allHitsBtn', 
+                           'filterBtn', 'markersBtn', 'ownerTypesBtn', 'ownerLoginsBtn'];
+            buttons.forEach(id => {
+                document.getElementById(id).disabled = false;
+            });
+        }
+
+        function openAPIDocs() {
+            window.open(`${API_BASE}/docs`, '_blank');
+        }
+
+        async function importMarkers() {
+            try {
+                const response = await fetch(`${API_BASE}/import-markers`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('importResult', `Successfully imported ${result.imported} records!`, 'success');
+                } else {
+                    showMessage('importResult', `Error: ${result.detail}`, 'error');
+                }
+            } catch (error) {
+                showMessage('importResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function importCustomFile() {
+            const filePath = prompt('Enter the path to your JSON file:');
+            if (!filePath) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/import-markers?json_file=${encodeURIComponent(filePath)}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage('importResult', `Successfully imported ${result.imported} records from ${filePath}!`, 'success');
+                } else {
+                    showMessage('importResult', `Error: ${result.detail}`, 'error');
+                }
+            } catch (error) {
+                showMessage('importResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getAllHits() {
+            try {
+                const response = await fetch(`${API_BASE}/hits`);
+                const hits = await response.json();
+                displayHits(hits);
+            } catch (error) {
+                showMessage('hitsResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getFilteredHits() {
+            const marker = document.getElementById('markerFilter').value;
+            const ownerType = document.getElementById('ownerTypeFilter').value;
+            const ownerLogin = document.getElementById('ownerLoginFilter').value;
+            
+            const params = new URLSearchParams();
+            if (marker) params.append('marker', marker);
+            if (ownerType) params.append('owner_type', ownerType);
+            if (ownerLogin) params.append('owner_login', ownerLogin);
+            
+            try {
+                const response = await fetch(`${API_BASE}/hits?${params}`);
+                const hits = await response.json();
+                displayHits(hits);
+            } catch (error) {
+                showMessage('hitsResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        function displayHits(hits) {
+            const resultDiv = document.getElementById('hitsResult');
+            if (hits.length === 0) {
+                resultDiv.innerHTML = '<p>No hits found.</p>';
+                return;
+            }
+            
+            resultDiv.innerHTML = hits.map(hit => `
+                <div class="result-item">
+                    <strong>${hit.repo_name}</strong> (${hit.stars} stars)<br>
+                    <strong>Marker:</strong> ${hit.marker}<br>
+                    <strong>File:</strong> ${hit.file_path}<br>
+                    <strong>Owner:</strong> ${hit.owner_login} (${hit.owner_type})<br>
+                    <strong>Repo URL:</strong> <a href="${hit.repo_url}" target="_blank">${hit.repo_url}</a><br>
+                    <strong>File URL:</strong> <a href="${hit.file_url}" target="_blank">${hit.file_url}</a>
+                </div>
+            `).join('');
+        }
+
+        async function getMarkers() {
+            try {
+                const response = await fetch(`${API_BASE}/markers`);
+                const markers = await response.json();
+                displayList('markersResult', markers, 'markers');
+            } catch (error) {
+                showMessage('markersResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getOwnerTypes() {
+            try {
+                const response = await fetch(`${API_BASE}/owner_types`);
+                const types = await response.json();
+                displayList('ownerTypesResult', types, 'owner types');
+            } catch (error) {
+                showMessage('ownerTypesResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getOwnerLogins() {
+            try {
+                const response = await fetch(`${API_BASE}/owner_logins`);
+                const logins = await response.json();
+                displayList('ownerLoginsResult', logins, 'owner logins');
+            } catch (error) {
+                showMessage('ownerLoginsResult', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        function displayList(elementId, items, label) {
+            const resultDiv = document.getElementById(elementId);
+            if (items.length === 0) {
+                resultDiv.innerHTML = `<p>No ${label} found.</p>`;
+                return;
+            }
+            
+            resultDiv.innerHTML = `<p>Found ${items.length} ${label}:</p><ul>${items.map(item => `<li>${item}</li>`).join('')}</ul>`;
+        }
+
+        function showMessage(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="${type === 'error' ? 'error' : 'success-message'}">${message}</div>`;
+        }
+
+        // Auto-check server status on page load
+        window.onload = function() {
+            checkServerStatus();
+            // Check every 30 seconds
+            setInterval(checkServerStatus, 30000);
+        };
+    </script>
+</body>
+</html> 
