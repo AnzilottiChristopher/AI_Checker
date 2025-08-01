@@ -26,10 +26,34 @@ import requests
 from github import Github
 from github.GithubException import RateLimitExceededException, UnknownObjectException
 import pandas as pd
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Configure logging for the module
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Database setup for direct SQLite writing
+DATABASE_URL = "sqlite:///./ai_code_generator.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class MarkerHit(Base):
+    __tablename__ = "marker_hits"
+    id = Column(Integer, primary_key=True, index=True)
+    marker = Column(String, index=True)
+    repo_name = Column(String, index=True)
+    repo_url = Column(String)
+    file_path = Column(String)
+    file_url = Column(String)
+    stars = Column(Integer)
+    description = Column(String)
+    owner_type = Column(String, index=True)
+    owner_login = Column(String, index=True)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 @dataclass
 class FileAnalysis:
@@ -316,6 +340,83 @@ class GitHubAPIScraper:
                 logger.error(f"Error searching for marker {marker}: {e}")
                 results[marker] = []
         return results
+
+    def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0) -> dict:
+        """
+        Search GitHub for repositories containing files that are markers for AI code generators
+        and writes results directly to a SQLite database.
+        Skips existing results to get new data points.
+
+        Args:
+            max_repos_per_pattern: Maximum repositories to return per marker pattern.
+            min_stars: Minimum number of stars for repositories to include.
+        """
+        # List of AI code generator marker files to search for
+        ai_markers = [
+            '.claude',
+            '.cursor',
+            '.copilot',
+            '.tabnine',
+            '.codewhisperer',
+            '.codesnippets',
+            '.kite',
+            '.ai',
+            '.openai',
+            '.aicode',
+        ]
+        
+        # Get existing records from database for duplicate checking
+        session = SessionLocal()
+        existing_records = session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).all()
+        existing_set = {(record[0], record[1], record[2]) for record in existing_records}
+        session.close()
+        
+        total_new_records = 0
+        for marker in ai_markers:
+            # Build the search query for the file path
+            query = f'path:{marker}'
+            if min_stars > 0:
+                query += f' stars:>={min_stars}'
+            
+            try:
+                self.check_rate_limit()
+                # Use the GitHub API to search for code files with the marker path
+                code_results = self.github.search_code(query=query)
+                
+                for file in code_results:
+                    try:
+                        repo = file.repository
+                        # Check if this result already exists
+                        result_key = (marker, repo.full_name, file.path)
+                        if result_key in existing_set:
+                            continue  # Skip this result
+                        
+                        session = SessionLocal()
+                        new_hit = MarkerHit(
+                            marker=marker,
+                            repo_name=repo.full_name,
+                            repo_url=repo.html_url,
+                            file_path=file.path,
+                            file_url=file.html_url,
+                            stars=repo.stargazers_count,
+                            description=repo.description,
+                            owner_type=repo.owner.type,
+                            owner_login=repo.owner.login,
+                        )
+                        session.add(new_hit)
+                        session.commit()
+                        session.close()
+                        total_new_records += 1
+                        logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path}")
+                    except Exception as e:
+                        logger.warning(f"Error processing file hit for {marker}: {e}")
+                        continue
+                
+                logger.info(f"Processed hits for marker {marker}")
+            except Exception as e:
+                logger.error(f"Error searching for marker {marker}: {e}")
+        
+        return {"total_new_records": total_new_records, "status": "completed"}
 
 class APICodeParser:
     """

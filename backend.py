@@ -2,18 +2,17 @@
 """
 FastAPI backend for storing and querying AI code generator marker hits.
 - Uses SQLAlchemy with SQLite for storage.
-- Provides endpoints to import data from JSON and to query/filter results.
+- Provides endpoints to query/filter results and run the scraper directly to database.
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import sessionmaker, declarative_base
-import json
-from pathlib import Path
+import os
 
 # Database setup
 DATABASE_URL = "sqlite:///./ai_code_generator.db"
@@ -51,6 +50,9 @@ class MarkerHitSchema(BaseModel):
     class Config:
         orm_mode = True
 
+class ScraperRequest(BaseModel):
+    github_token: Optional[str] = None
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
@@ -73,53 +75,7 @@ def get_db():
     finally:
         db.close()
 
-# Endpoint to import data from JSON file
-def import_json_to_db(json_path: Path, db):
-    """
-    Import marker hits from a JSON file into the database.
-    Expects the format produced by ai_code_generator_marker_search().
-    """
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    count = 0
-    for marker, hits in data.items():
-        for hit in hits:
-            # Check if already exists (by marker, repo_name, file_path)
-            exists = db.query(MarkerHit).filter_by(
-                marker=marker,
-                repo_name=hit['repo_name'],
-                file_path=hit['file_path']
-            ).first()
-            if not exists:
-                db.add(MarkerHit(
-                    marker=marker,
-                    repo_name=hit['repo_name'],
-                    repo_url=hit['repo_url'],
-                    file_path=hit['file_path'],
-                    file_url=hit['file_url'],
-                    stars=hit.get('stars', 0),
-                    description=hit.get('description'),
-                    owner_type=hit.get('owner_type', ''),
-                    owner_login=hit.get('owner_login', ''),
-                ))
-                count += 1
-    db.commit()
-    return count
 
-@app.post("/import-markers", response_class=JSONResponse)
-def import_markers(json_file: Optional[str] = Query(None, description="Path to JSON file to import")):
-    """
-    Import marker hits from a JSON file (default: ai_code_generator_analysis/ai_code_generator_markers.json).
-    """
-    db = next(get_db())
-    if json_file is None:
-        json_path = Path("ai_code_generator_analysis/ai_code_generator_markers.json")
-    else:
-        json_path = Path(json_file)
-    if not json_path.exists():
-        raise HTTPException(status_code=404, detail=f"File not found: {json_path}")
-    count = import_json_to_db(json_path, db)
-    return {"imported": count}
 
 @app.get("/hits", response_model=List[MarkerHitSchema])
 def list_hits(marker: Optional[str] = None, owner_type: Optional[str] = None, owner_login: Optional[str] = None):
@@ -168,7 +124,50 @@ def health_check():
     """Simple health check endpoint for the frontend to verify server status."""
     return {"status": "ok", "message": "Server is running"}
 
+@app.post("/run-scraper")
+async def run_scraper(request: ScraperRequest):
+    """
+    Run the GitHub scraper to collect new AI code generator marker data.
+    This endpoint will:
+    1. Run the scraper to find new repositories
+    2. Write results directly to SQLite database (no JSON file)
+    """
+    try:
+        # Check if GitHub token is available (from request or environment)
+        github_token = request.github_token or os.getenv('GITHUB_TOKEN')
+        if not github_token:
+            raise HTTPException(
+                status_code=400, 
+                detail="GitHub token not found. Please set GITHUB_TOKEN environment variable or provide token in request."
+            )
+        
+        # Import the scraper
+        from github_api_scraper import GitHubAPIScraper
+        
+        # Initialize scraper with the provided token
+        scraper = GitHubAPIScraper(token=github_token)
+        
+        # Run the scraper directly to database (no JSON file needed)
+        results = scraper.search_ai_code_generator_files_to_db()
+        
+        return {
+            "status": "success",
+            "message": f"Scraper completed successfully! Added {results['total_new_records']} new records to database.",
+            "new_records": results['total_new_records']
+        }
+        
+    except ImportError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to import scraper module: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Scraper failed: {str(e)}"
+        )
+
 # Example usage:
 # 1. Start the server: uvicorn backend:app --reload
-# 2. Import data: POST /import-markers (optionally with ?json_file=path)
-# 3. Query: GET /hits, /hits?marker=.claude, /hits?owner_type=Organization, etc. 
+# 2. Query: GET /hits, /hits?marker=.claude, /hits?owner_type=Organization, etc.
+# 3. Run scraper: POST /run-scraper (writes directly to database) 

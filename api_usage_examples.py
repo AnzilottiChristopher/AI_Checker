@@ -286,72 +286,27 @@ def quick_repo_check():
 def ai_code_generator_marker_search():
     """
     Example: Search for repositories containing AI code generator marker files (e.g., .claude, .cursor, .copilot, etc.).
-    Prints a summary of repositories/files found for each marker and writes all results to a JSON file.
-    Output file: ai_code_generator_analysis/ai_code_generator_markers.json
+    Writes results directly to SQLite database and prints a summary.
     """
     from github_api_scraper import GitHubAPIScraper
     import os
-    import json
-    from pathlib import Path
     
     # Get GitHub token from environment (recommended)
     github_token = os.getenv('GITHUB_TOKEN')
     scraper = GitHubAPIScraper(github_token)
     
-    # Load existing data if available
-    existing_data = None
-    json_path = Path("ai_code_generator_analysis/ai_code_generator_markers.json")
-    if json_path.exists():
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                existing_data = json.load(f)
-            print(f"Loaded {sum(len(hits) for hits in existing_data.values())} existing results")
-        except Exception as e:
-            print(f"Error loading existing data: {e}")
-    
-    # Search for AI code generator marker files (skipping existing ones)
+    # Search for AI code generator marker files (writes directly to database)
     print("=== AI Code Generator Marker File Search ===")
-    results = scraper.search_ai_code_generator_files(
+    results = scraper.search_ai_code_generator_files_to_db(
         max_repos_per_pattern=10, 
-        min_stars=0,
-        existing_data=existing_data
+        min_stars=0
     )
     
-    for marker, hits in results.items():
-        print(f"\nMarker: {marker}")
-        if not hits:
-            print("  No repositories found.")
-        for hit in hits:
-            print(f"  Repo: {hit['repo_name']} | File: {hit['file_path']} | Stars: {hit['stars']}")
-            print(f"    Repo URL: {hit['repo_url']}")
-            print(f"    File URL: {hit['file_url']}")
-            if hit['description']:
-                print(f"    Description: {hit['description']}")
-    
-    # Merge with existing data and write to JSON file
-    output_dir = Path("ai_code_generator_analysis")
-    output_dir.mkdir(exist_ok=True)
-    output_file = output_dir / "ai_code_generator_markers.json"
-    
-    # Merge new results with existing data
-    if existing_data:
-        for marker, hits in results.items():
-            if marker in existing_data:
-                existing_data[marker].extend(hits)
-            else:
-                existing_data[marker] = hits
-        final_results = existing_data
-    else:
-        final_results = results
-    
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(final_results, f, indent=2, ensure_ascii=False)
-    
-    total_new = sum(len(hits) for hits in results.values())
-    total_final = sum(len(hits) for hits in final_results.values())
-    print(f"\nAdded {total_new} new results")
-    print(f"Total results in file: {total_final}")
-    print(f"All results written to {output_file}")
+    print(f"\nScraper completed!")
+    print(f"New records added to database: {results['total_new_records']}")
+    print(f"Status: {results['status']}")
+    print("\nData is now available in the SQLite database (ai_code_generator.db)")
+    print("Use the backend API or frontend to query the data.")
 
 # =========================
 # Main Entry Point
@@ -369,7 +324,7 @@ if __name__ == "__main__":
     print("7. rate_limit_aware_analysis() - Rate limit management")
     print("8. export_and_visualization_example() - Export options")
     print("9. quick_repo_check() - Interactive single repo check")
-    print("10. ai_code_generator_marker_search() - Search for AI code generator marker files")
+    print("10. ai_code_generator_marker_search() - Search for AI code generator marker files (direct to database)")
     print("\nUncomment the function you want to run:")
     print()
     
