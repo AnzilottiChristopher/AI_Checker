@@ -21,12 +21,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from collections import defaultdict, Counter
+from datetime import datetime
 
 import requests
 from github import Github
 from github.GithubException import RateLimitExceededException, UnknownObjectException
 import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Configure logging for the module
@@ -51,6 +52,11 @@ class MarkerHit(Base):
     description = Column(String)
     owner_type = Column(String, index=True)
     owner_login = Column(String, index=True)
+    # Contact information fields
+    owner_email = Column(String)
+    owner_linkedin = Column(String)
+    contact_source = Column(String)  # 'github_profile', 'repo_content', or 'none'
+    contact_extracted_at = Column(DateTime, default=datetime.utcnow)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -341,7 +347,7 @@ class GitHubAPIScraper:
                 results[marker] = []
         return results
 
-    def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0) -> dict:
+    def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0, extract_contacts: bool = True) -> dict:
         """
         Search GitHub for repositories containing files that are markers for AI code generators
         and writes results directly to a SQLite database.
@@ -383,13 +389,31 @@ class GitHubAPIScraper:
                 # Use the GitHub API to search for code files with the marker path
                 code_results = self.github.search_code(query=query)
                 
+                processed_count = 0
                 for file in code_results:
+                    # Limit processing per marker to avoid taking too long
+                    if processed_count >= max_repos_per_pattern:
+                        logger.info(f"Reached limit of {max_repos_per_pattern} repos for marker {marker}")
+                        break
+                        
                     try:
                         repo = file.repository
                         # Check if this result already exists
                         result_key = (marker, repo.full_name, file.path)
                         if result_key in existing_set:
                             continue  # Skip this result
+                        
+                        # Extract contact information for the repository owner (optional)
+                        if extract_contacts:
+                            owner_contacts = self.extract_contact_info(repo.owner.login)
+                            
+                            # If no contacts found in profile, try repository content
+                            if owner_contacts['source'] == 'none':
+                                repo_contacts = self.extract_contacts_from_repo_content(repo.full_name)
+                                if repo_contacts['source'] != 'none':
+                                    owner_contacts = repo_contacts
+                        else:
+                            owner_contacts = {'email': None, 'linkedin_url': None, 'source': 'none'}
                         
                         session = SessionLocal()
                         new_hit = MarkerHit(
@@ -402,21 +426,124 @@ class GitHubAPIScraper:
                             description=repo.description,
                             owner_type=repo.owner.type,
                             owner_login=repo.owner.login,
+                            owner_email=owner_contacts['email'],
+                            owner_linkedin=owner_contacts['linkedin_url'],
+                            contact_source=owner_contacts['source'],
+                            contact_extracted_at=datetime.utcnow()
                         )
                         session.add(new_hit)
                         session.commit()
                         session.close()
                         total_new_records += 1
-                        logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path}")
+                        processed_count += 1
+                        logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path} (contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
                     except Exception as e:
                         logger.warning(f"Error processing file hit for {marker}: {e}")
                         continue
                 
-                logger.info(f"Processed hits for marker {marker}")
+                logger.info(f"Processed {processed_count} hits for marker {marker}")
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
         
         return {"total_new_records": total_new_records, "status": "completed"}
+
+    def extract_contact_info(self, username: str) -> Dict[str, Optional[str]]:
+        """
+        Extract email and LinkedIn information from a GitHub user's profile.
+        
+        Args:
+            username: GitHub username
+            
+        Returns:
+            Dictionary with email, linkedin_url, and source information
+        """
+        try:
+            self.check_rate_limit()
+            user = self.github.get_user(username)
+            
+            contacts = {
+                'email': None,
+                'linkedin_url': None,
+                'source': 'none'
+            }
+            
+            # Check public email
+            if user.email:
+                contacts['email'] = user.email
+                contacts['source'] = 'github_profile'
+            
+            # Check website for LinkedIn
+            if user.blog:
+                if 'linkedin.com' in user.blog:
+                    contacts['linkedin_url'] = user.blog
+                    if contacts['source'] == 'none':
+                        contacts['source'] = 'github_profile'
+            
+            # Check bio for LinkedIn
+            if user.bio:
+                linkedin_match = re.search(r'linkedin\.com/in/[\w-]+', user.bio)
+                if linkedin_match:
+                    contacts['linkedin_url'] = f"https://{linkedin_match.group()}"
+                    if contacts['source'] == 'none':
+                        contacts['source'] = 'github_profile'
+            
+            return contacts
+            
+        except Exception as e:
+            logger.warning(f"Error extracting contact info for {username}: {e}")
+            return {'email': None, 'linkedin_url': None, 'source': 'none'}
+
+    def extract_contacts_from_repo_content(self, repo_name: str) -> Dict[str, Optional[str]]:
+        """
+        Extract contact information from repository content (README, package.json, etc.).
+        
+        Args:
+            repo_name: Repository name (owner/repo)
+            
+        Returns:
+            Dictionary with email, linkedin_url, and source information
+        """
+        try:
+            owner, repo = repo_name.split('/', 1)
+            repo_obj = self.github.get_repo(repo_name)
+            
+            files_to_check = ['README.md', 'package.json', 'CONTRIBUTING.md']
+            
+            for filename in files_to_check:
+                try:
+                    self.check_rate_limit()
+                    content_obj = repo_obj.get_contents(filename)
+                    content = content_obj.decoded_content.decode('utf-8', errors='ignore')
+                    
+                    # Extract emails
+                    emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', content)
+                    
+                    # Extract LinkedIn URLs
+                    linkedin_patterns = [
+                        r'linkedin\.com/in/[\w-]+',
+                        r'https?://[^\s]*linkedin\.com/in/[\w-]+'
+                    ]
+                    
+                    linkedin_urls = []
+                    for pattern in linkedin_patterns:
+                        matches = re.findall(pattern, content)
+                        linkedin_urls.extend(matches)
+                    
+                    if emails or linkedin_urls:
+                        return {
+                            'email': emails[0] if emails else None,
+                            'linkedin_url': linkedin_urls[0] if linkedin_urls else None,
+                            'source': 'repo_content'
+                        }
+                        
+                except Exception as e:
+                    continue  # File doesn't exist or other error
+            
+            return {'email': None, 'linkedin_url': None, 'source': 'none'}
+            
+        except Exception as e:
+            logger.warning(f"Error extracting contacts from repo {repo_name}: {e}")
+            return {'email': None, 'linkedin_url': None, 'source': 'none'}
 
 class APICodeParser:
     """

@@ -407,29 +407,41 @@
             color: hsl(var(--muted-foreground));
         }
 
-        /* Data Display */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-
-        .data-table th,
-        .data-table td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid hsl(var(--border));
-        }
-
-        .data-table th {
-            font-weight: 600;
-            color: hsl(var(--muted-foreground));
-            font-size: 0.875rem;
-        }
-
-        .data-table tr:hover {
-            background: hsl(var(--muted) / 0.3);
-        }
+                 /* Data Display */
+         .data-table {
+             width: 100%;
+             border-collapse: collapse;
+             margin-top: 1rem;
+         }
+ 
+         .data-table th,
+         .data-table td {
+             padding: 0.75rem;
+             text-align: left;
+             border-bottom: 1px solid hsl(var(--border));
+         }
+ 
+         .data-table th {
+             font-weight: 600;
+             color: hsl(var(--muted-foreground));
+             font-size: 0.875rem;
+         }
+ 
+         .data-table tr:hover {
+             background: hsl(var(--muted) / 0.3);
+         }
+ 
+         /* Repository Links */
+         .data-table a {
+             color: hsl(200 100% 70%); /* Bright blue */
+             text-decoration: none;
+             transition: color 0.2s ease;
+         }
+ 
+         .data-table a:hover {
+             color: hsl(200 100% 85%); /* Even brighter on hover */
+             text-decoration: underline;
+         }
 
         /* Alerts */
         .alert {
@@ -530,10 +542,6 @@
                                 <span id="checkStatusIcon">🔄</span>
                                 <span id="checkStatusText">Check Status</span>
                             </button>
-                            
-                            <button class="btn" onclick="openAPIDocs()" id="apiDocsBtn" disabled>
-                                📖 API Docs
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -552,6 +560,19 @@
                             <input type="password" class="form-input" id="githubToken" placeholder="Enter your GitHub API token (optional)">
                             <small style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">
                                 Leave empty to use GITHUB_TOKEN environment variable, or enter your token here
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Extract Contact Info:</label>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" id="extractContacts" checked style="width: auto;">
+                                <label for="extractContacts" style="margin: 0; font-size: 0.875rem;">
+                                    Extract emails and LinkedIn profiles
+                                </label>
+                            </div>
+                            <small style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">
+                                Uncheck for faster scraping without contact extraction
                             </small>
                         </div>
                         
@@ -587,37 +608,68 @@
                         <p class="card-description">Search and filter your AI marker data</p>
                     </div>
                     <div class="card-content">
-                        <div class="grid grid-cols-3">
-                            <div class="form-group">
-                                <label class="form-label">Marker Type:</label>
-                                <select class="form-select" id="markerFilter">
-                                    <option value="">All Markers</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Owner Type:</label>
-                                <select class="form-select" id="ownerTypeFilter">
-                                    <option value="">All Types</option>
-                                    <option value="User">User</option>
-                                    <option value="Organization">Organization</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Owner Login:</label>
-                                <select class="form-select" id="ownerLoginFilter">
-                                    <option value="">All Owners</option>
-                                </select>
-                            </div>
-                        </div>
+                                                 <div class="grid grid-cols-3">
+                             <div class="form-group">
+                                 <label class="form-label">Marker Type:</label>
+                                 <select class="form-select" id="markerFilter">
+                                     <option value="">All Markers</option>
+                                 </select>
+                             </div>
+                             <div class="form-group">
+                                 <label class="form-label">Owner Type:</label>
+                                 <select class="form-select" id="ownerTypeFilter">
+                                     <option value="">All Types</option>
+                                     <option value="User">User</option>
+                                     <option value="Organization">Organization</option>
+                                 </select>
+                             </div>
+                             <div class="form-group">
+                                 <label class="form-label">Owner Login:</label>
+                                 <select class="form-select" id="ownerLoginFilter">
+                                     <option value="">All Owners</option>
+                                 </select>
+                             </div>
+                         </div>
+                         
+                         <div class="grid grid-cols-3" style="margin-top: 1rem;">
+                             <div class="form-group">
+                                 <label class="form-label">Has Email:</label>
+                                 <select class="form-select" id="hasEmailFilter">
+                                     <option value="">All Records</option>
+                                     <option value="true">With Email</option>
+                                     <option value="false">Without Email</option>
+                                 </select>
+                             </div>
+                             <div class="form-group">
+                                 <label class="form-label">Has LinkedIn:</label>
+                                 <select class="form-select" id="hasLinkedInFilter">
+                                     <option value="">All Records</option>
+                                     <option value="true">With LinkedIn</option>
+                                     <option value="false">Without LinkedIn</option>
+                                 </select>
+                             </div>
+                             <div class="form-group">
+                                 <label class="form-label">Contact Source:</label>
+                                 <select class="form-select" id="contactSourceFilter">
+                                     <option value="">All Sources</option>
+                                     <option value="github_profile">GitHub Profile</option>
+                                     <option value="repo_content">Repository Content</option>
+                                     <option value="none">No Contact Info</option>
+                                 </select>
+                             </div>
+                         </div>
                         
-                        <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
-                            <button class="btn" onclick="queryData()" id="queryBtn">
-                                🔍 Query Data
-                            </button>
-                            <button class="btn btn-outline" onclick="exportData()" id="exportBtn">
-                                📤 Export Results
-                            </button>
-                        </div>
+                                                 <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                             <button class="btn" onclick="queryData()" id="queryBtn">
+                                 🔍 Query Data
+                             </button>
+                             <button class="btn btn-outline" onclick="exportData()" id="exportBtn">
+                                 📤 Export Results
+                             </button>
+                             <button class="btn btn-outline" onclick="loadContactStats()" id="statsBtn">
+                                 📊 Contact Stats
+                             </button>
+                         </div>
                         
                         <div id="queryResult"></div>
                     </div>
@@ -653,7 +705,6 @@
             const checkBtn = document.getElementById('checkStatusBtn');
             const checkIcon = document.getElementById('checkStatusIcon');
             const checkText = document.getElementById('checkStatusText');
-            const apiDocsBtn = document.getElementById('apiDocsBtn');
 
             // Show loading state
             checkBtn.disabled = true;
@@ -668,24 +719,20 @@
                         serverOnline = true;
                         statusBadge.className = 'status-badge online';
                         statusText.textContent = 'Online';
-                        apiDocsBtn.disabled = false;
                     } else {
                         serverOnline = false;
                         statusBadge.className = 'status-badge offline';
                         statusText.textContent = 'Offline';
-                        apiDocsBtn.disabled = true;
                     }
                 } else {
                     serverOnline = false;
                     statusBadge.className = 'status-badge offline';
                     statusText.textContent = 'Offline';
-                    apiDocsBtn.disabled = true;
                 }
             } catch (error) {
                 serverOnline = false;
                 statusBadge.className = 'status-badge offline';
                 statusText.textContent = 'Offline';
-                apiDocsBtn.disabled = true;
             }
 
             // Reset button state
@@ -694,10 +741,7 @@
             checkText.textContent = 'Check Status';
         }
 
-        // Open API docs
-        function openAPIDocs() {
-            window.open(`${API_BASE}/docs`, '_blank');
-        }
+
 
 
 
@@ -746,7 +790,9 @@
             }, 1000);
 
             try {
-                const requestBody = {};
+                const requestBody = {
+                    extract_contacts: document.getElementById('extractContacts').checked
+                };
                 if (githubToken) {
                     requestBody.github_token = githubToken;
                 }
@@ -858,43 +904,49 @@
             }
         }
 
-        // Query data
-        async function queryData() {
-            const markerFilter = document.getElementById('markerFilter').value;
-            const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
-            const ownerLoginFilter = document.getElementById('ownerLoginFilter').value;
-            const queryBtn = document.getElementById('queryBtn');
-            const queryResult = document.getElementById('queryResult');
+                 // Query data
+         async function queryData() {
+             const markerFilter = document.getElementById('markerFilter').value;
+             const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
+             const ownerLoginFilter = document.getElementById('ownerLoginFilter').value;
+             const hasEmailFilter = document.getElementById('hasEmailFilter').value;
+             const hasLinkedInFilter = document.getElementById('hasLinkedInFilter').value;
+             const contactSourceFilter = document.getElementById('contactSourceFilter').value;
+             const queryBtn = document.getElementById('queryBtn');
+             const queryResult = document.getElementById('queryResult');
 
-            if (!serverOnline) {
-                showAlert('Server is offline. Please start the backend server.', 'error');
-                return;
-            }
+             if (!serverOnline) {
+                 showAlert('Server is offline. Please start the backend server.', 'error');
+                 return;
+             }
 
-            queryBtn.disabled = true;
-            queryBtn.innerHTML = '⏳ Querying...';
+             queryBtn.disabled = true;
+             queryBtn.innerHTML = '⏳ Querying...';
 
-            try {
-                const params = new URLSearchParams();
-                if (markerFilter) params.append('marker', markerFilter);
-                if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
-                if (ownerLoginFilter) params.append('owner_login', ownerLoginFilter);
+             try {
+                 const params = new URLSearchParams();
+                 if (markerFilter) params.append('marker', markerFilter);
+                 if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
+                 if (ownerLoginFilter) params.append('owner_login', ownerLoginFilter);
+                 if (hasEmailFilter) params.append('has_email', hasEmailFilter);
+                 if (hasLinkedInFilter) params.append('has_linkedin', hasLinkedInFilter);
+                 if (contactSourceFilter) params.append('contact_source', contactSourceFilter);
 
-                const response = await fetch(`${API_BASE}/hits?${params}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    displayResults(data);
-                } else {
-                    const error = await response.json();
-                    showAlert(`Query failed: ${error.detail}`, 'error');
-                }
-            } catch (error) {
-                showAlert(`Query failed: ${error.message}`, 'error');
-            }
+                 const response = await fetch(`${API_BASE}/hits?${params}`);
+                 if (response.ok) {
+                     const data = await response.json();
+                     displayResults(data);
+                 } else {
+                     const error = await response.json();
+                     showAlert(`Query failed: ${error.detail}`, 'error');
+                 }
+             } catch (error) {
+                 showAlert(`Query failed: ${error.message}`, 'error');
+             }
 
-            queryBtn.disabled = false;
-            queryBtn.innerHTML = '🔍 Query Data';
-        }
+             queryBtn.disabled = false;
+             queryBtn.innerHTML = '🔍 Query Data';
+         }
 
         // Display results
         function displayResults(data) {
@@ -910,31 +962,39 @@
                     <h4>Results (${data.length} records)</h4>
                     <div style="overflow-x: auto;">
                         <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Marker</th>
-                                    <th>Repository</th>
-                                    <th>File Path</th>
-                                    <th>Owner Type</th>
-                                    <th>Owner</th>
-                                    <th>Stars</th>
-                                </tr>
-                            </thead>
+                                                         <thead>
+                                 <tr>
+                                     <th>Marker</th>
+                                     <th>Repository</th>
+                                     <th>File Path</th>
+                                     <th>Owner Type</th>
+                                     <th>Owner</th>
+                                     <th>Stars</th>
+                                     <th>Email</th>
+                                     <th>LinkedIn</th>
+                                 </tr>
+                             </thead>
                             <tbody>
             `;
 
-            data.forEach(item => {
-                tableHTML += `
-                    <tr>
-                        <td><code>${item.marker}</code></td>
-                        <td><a href="${item.repo_url}" target="_blank">${item.repo_name}</a></td>
-                        <td><code>${item.file_path}</code></td>
-                        <td>${item.owner_type || 'N/A'}</td>
-                        <td>${item.owner_login || 'N/A'}</td>
-                        <td>${item.stars || 0}</td>
-                    </tr>
-                `;
-            });
+                         data.forEach(item => {
+                 // Format contact information
+                 const email = item.owner_email ? `<a href="mailto:${item.owner_email}">${item.owner_email}</a>` : 'N/A';
+                 const linkedin = item.owner_linkedin ? `<a href="${item.owner_linkedin}" target="_blank">LinkedIn</a>` : 'N/A';
+                 
+                 tableHTML += `
+                     <tr>
+                         <td><code>${item.marker}</code></td>
+                         <td><a href="${item.repo_url}" target="_blank">${item.repo_name}</a></td>
+                         <td><code>${item.file_path}</code></td>
+                         <td>${item.owner_type || 'N/A'}</td>
+                         <td>${item.owner_login || 'N/A'}</td>
+                         <td>${item.stars || 0}</td>
+                         <td>${email}</td>
+                         <td>${linkedin}</td>
+                     </tr>
+                 `;
+             });
 
             tableHTML += `
                             </tbody>
@@ -994,8 +1054,63 @@
             }, 5000);
         }
 
-        // Auto-check server status every 30 seconds
-        setInterval(checkServerStatus, 30000);
+                 // Load contact statistics
+         async function loadContactStats() {
+             if (!serverOnline) {
+                 showAlert('Server is offline. Please start the backend server.', 'error');
+                 return;
+             }
+
+             try {
+                 const response = await fetch(`${API_BASE}/contact-stats`);
+                 if (response.ok) {
+                     const stats = await response.json();
+                     displayContactStats(stats);
+                 } else {
+                     const error = await response.json();
+                     showAlert(`Failed to load stats: ${error.detail}`, 'error');
+                 }
+             } catch (error) {
+                 showAlert(`Failed to load stats: ${error.message}`, 'error');
+             }
+         }
+
+         // Display contact statistics
+         function displayContactStats(stats) {
+             const queryResult = document.getElementById('queryResult');
+             
+             const statsHtml = `
+                 <div style="margin-top: 1rem;">
+                     <h4>📊 Contact Information Statistics</h4>
+                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem;">
+                         <div style="background: hsl(var(--card-secondary)); padding: 1rem; border-radius: 0.5rem; border: 1px solid hsl(var(--border));">
+                             <h5 style="margin-bottom: 0.5rem; color: hsl(var(--muted-foreground));">Total Records</h5>
+                             <p style="font-size: 1.5rem; font-weight: 600;">${stats.total_records}</p>
+                         </div>
+                         <div style="background: hsl(var(--card-secondary)); padding: 1rem; border-radius: 0.5rem; border: 1px solid hsl(var(--border));">
+                             <h5 style="margin-bottom: 0.5rem; color: hsl(var(--muted-foreground));">With Email</h5>
+                             <p style="font-size: 1.5rem; font-weight: 600; color: hsl(var(--success));">${stats.records_with_email}</p>
+                             <small style="color: hsl(var(--muted-foreground));">${stats.email_percentage}%</small>
+                         </div>
+                         <div style="background: hsl(var(--card-secondary)); padding: 1rem; border-radius: 0.5rem; border: 1px solid hsl(var(--border));">
+                             <h5 style="margin-bottom: 0.5rem; color: hsl(var(--muted-foreground));">With LinkedIn</h5>
+                             <p style="font-size: 1.5rem; font-weight: 600; color: hsl(var(--primary));">${stats.records_with_linkedin}</p>
+                             <small style="color: hsl(var(--muted-foreground));">${stats.linkedin_percentage}%</small>
+                         </div>
+                         <div style="background: hsl(var(--card-secondary)); padding: 1rem; border-radius: 0.5rem; border: 1px solid hsl(var(--border));">
+                             <h5 style="margin-bottom: 0.5rem; color: hsl(var(--muted-foreground));">Any Contact Info</h5>
+                             <p style="font-size: 1.5rem; font-weight: 600; color: hsl(var(--success));">${stats.records_with_any_contact}</p>
+                             <small style="color: hsl(var(--muted-foreground));">${stats.any_contact_percentage}%</small>
+                         </div>
+                     </div>
+                 </div>
+             `;
+             
+             queryResult.innerHTML = statsHtml;
+         }
+
+         // Auto-check server status every 30 seconds
+         setInterval(checkServerStatus, 30000);
     </script>
 </body>
 </html> 
