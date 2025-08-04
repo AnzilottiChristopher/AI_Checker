@@ -3,6 +3,12 @@
 
 # Database files
 *.db
+*.sqlite
+*.sqlite3
+
+# PostgreSQL
+*.psql
+postgresql_data/
 
 # Python cache and compiled files
 __pycache__/
@@ -23,6 +29,10 @@ basic_analysis/
 ai_code_generator_analysis/
 api_analysis_output/
 
+# Migration files
+migration_backup/
+*.backup
+
 # IDE and editor files
 .vscode/
 .idea/
@@ -41,3 +51,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Vercel
+.vercel/

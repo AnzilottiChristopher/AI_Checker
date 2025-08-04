@@ -292,6 +292,113 @@
             padding: 0.5rem;
         }
 
+        /* Ultra-Compact Filter Bar */
+        .filter-bar {
+            background: hsl(var(--card-secondary));
+            border: 1px solid hsl(var(--border));
+            border-radius: var(--radius);
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .filter-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .filter-chip {
+            position: relative;
+        }
+
+        .chip-select {
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: 9999px;
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+            color: hsl(var(--foreground));
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2rem;
+        }
+
+        .chip-select:hover {
+            border-color: hsl(var(--primary));
+            background-color: hsl(var(--muted));
+        }
+
+        .chip-select:focus {
+            outline: none;
+            border-color: hsl(var(--primary));
+            box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+        }
+
+        .chip-select option {
+            background: hsl(var(--card));
+            color: hsl(var(--foreground));
+            padding: 0.5rem;
+        }
+
+        .chip-btn {
+            background: hsl(var(--primary));
+            border: none;
+            border-radius: 50%;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            color: white;
+        }
+
+        .chip-btn:hover {
+            background: hsl(var(--primary) / 0.8);
+            transform: scale(1.1);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .filter-chips {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .filter-chip {
+                width: 100%;
+            }
+            
+            .chip-select {
+                width: 100%;
+                min-width: unset;
+            }
+            
+            .chip-btn {
+                width: 100%;
+                border-radius: var(--radius);
+                height: 2.5rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+
         /* Progress Bar */
         .progress-container {
             margin: 1rem 0;
@@ -608,68 +715,77 @@
                         <p class="card-description">Search and filter your AI marker data</p>
                     </div>
                     <div class="card-content">
-                                                 <div class="grid grid-cols-3">
-                             <div class="form-group">
-                                 <label class="form-label">Marker Type:</label>
-                                 <select class="form-select" id="markerFilter">
-                                     <option value="">All Markers</option>
-                                 </select>
-                             </div>
-                             <div class="form-group">
-                                 <label class="form-label">Owner Type:</label>
-                                 <select class="form-select" id="ownerTypeFilter">
-                                     <option value="">All Types</option>
-                                     <option value="User">User</option>
-                                     <option value="Organization">Organization</option>
-                                 </select>
-                             </div>
-                             <div class="form-group">
-                                 <label class="form-label">Owner Login:</label>
-                                 <select class="form-select" id="ownerLoginFilter">
-                                     <option value="">All Owners</option>
-                                 </select>
-                             </div>
-                         </div>
-                         
-                         <div class="grid grid-cols-3" style="margin-top: 1rem;">
-                             <div class="form-group">
-                                 <label class="form-label">Has Email:</label>
-                                 <select class="form-select" id="hasEmailFilter">
-                                     <option value="">All Records</option>
-                                     <option value="true">With Email</option>
-                                     <option value="false">Without Email</option>
-                                 </select>
-                             </div>
-                             <div class="form-group">
-                                 <label class="form-label">Has LinkedIn:</label>
-                                 <select class="form-select" id="hasLinkedInFilter">
-                                     <option value="">All Records</option>
-                                     <option value="true">With LinkedIn</option>
-                                     <option value="false">Without LinkedIn</option>
-                                 </select>
-                             </div>
-                             <div class="form-group">
-                                 <label class="form-label">Contact Source:</label>
-                                 <select class="form-select" id="contactSourceFilter">
-                                     <option value="">All Sources</option>
-                                     <option value="github_profile">GitHub Profile</option>
-                                     <option value="repo_content">Repository Content</option>
-                                     <option value="none">No Contact Info</option>
-                                 </select>
-                             </div>
-                         </div>
+                        <!-- Ultra-Compact Filter Bar -->
+                        <div class="filter-bar">
+                            <div class="filter-chips">
+                                <div class="filter-chip">
+                                    <select class="chip-select" id="markerFilter">
+                                        <option value="">🎯 Filter by Marker</option>
+                                    </select>
+                                </div>
+                                <div class="filter-chip">
+                                    <select class="chip-select" id="ownerTypeFilter">
+                                        <option value="">👥 Filter by Owner Type</option>
+                                        <option value="User">👤 User</option>
+                                        <option value="Organization">🏢 Organization</option>
+                                    </select>
+                                </div>
+                                <div class="filter-chip">
+                                    <select class="chip-select" id="ownerLoginFilter">
+                                        <option value="">👤 Filter by Owner</option>
+                                    </select>
+                                </div>
+                                <div class="filter-chip">
+                                    <select class="chip-select" id="hasEmailFilter">
+                                        <option value="">📧 Filter by Email</option>
+                                        <option value="true">✅ Has Email</option>
+                                        <option value="false">❌ No Email</option>
+                                    </select>
+                                </div>
+                                <div class="filter-chip">
+                                    <select class="chip-select" id="hasLinkedInFilter">
+                                        <option value="">💼 Filter by LinkedIn</option>
+                                        <option value="true">✅ Has LinkedIn</option>
+                                        <option value="false">❌ No LinkedIn</option>
+                                    </select>
+                                </div>
+                                                                 <div class="filter-chip">
+                                     <select class="chip-select" id="sortByFilter">
+                                         <option value="stars_desc">⭐ Sort by Most Stars</option>
+                                         <option value="commit_desc">📅 Sort by Latest Commit</option>
+                                         <option value="">🕒 Sort by Recent</option>
+                                         <option value="stars_asc">⭐ Sort by Least Stars</option>
+                                         <option value="commit_asc">📅 Sort by Oldest Commit</option>
+                                         <option value="name_asc">📝 Sort A-Z</option>
+                                         <option value="name_desc">📝 Sort Z-A</option>
+                                     </select>
+                                 </div>
+                                <div class="filter-chip">
+                                    <select class="chip-select" id="limitFilter">
+                                        <option value="">∞ Show All Results</option>
+                                        <option value="10">🔟 Show Top 10</option>
+                                        <option value="25">🔢 Show Top 25</option>
+                                        <option value="50">🔢 Show Top 50</option>
+                                    </select>
+                                </div>
+                                <button class="chip-btn" onclick="getTopRepos()" title="Get Top Repositories">
+                                    🏆
+                                </button>
+                            </div>
+                        </div>
                         
-                                                 <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
-                             <button class="btn" onclick="queryData()" id="queryBtn">
-                                 🔍 Query Data
-                             </button>
-                             <button class="btn btn-outline" onclick="exportData()" id="exportBtn">
-                                 📤 Export Results
-                             </button>
-                             <button class="btn btn-outline" onclick="loadContactStats()" id="statsBtn">
-                                 📊 Contact Stats
-                             </button>
-                         </div>
+                        <!-- Action Buttons -->
+                        <div class="action-buttons">
+                            <button class="btn" onclick="queryData()" id="queryBtn">
+                                🔍 Query Data
+                            </button>
+                            <button class="btn btn-outline" onclick="exportData()" id="exportBtn">
+                                📤 Export
+                            </button>
+                            <button class="btn btn-outline" onclick="loadContactStats()" id="statsBtn">
+                                📊 Stats
+                            </button>
+                        </div>
                         
                         <div id="queryResult"></div>
                     </div>
@@ -697,6 +813,8 @@
             checkServerStatus();
             loadFilters();
         });
+
+
 
         // Check server status
         async function checkServerStatus() {
@@ -872,7 +990,7 @@
                 if (markersResponse.ok) {
                     const markers = await markersResponse.json();
                     const markerSelect = document.getElementById('markerFilter');
-                    markerSelect.innerHTML = '<option value="">All Markers</option>';
+                    markerSelect.innerHTML = '<option value="">🎯 Filter by Marker</option>';
                     markers.forEach(marker => {
                         markerSelect.innerHTML += `<option value="${marker}">${marker}</option>`;
                     });
@@ -883,7 +1001,7 @@
                 if (ownerTypesResponse.ok) {
                     const ownerTypes = await ownerTypesResponse.json();
                     const ownerTypeSelect = document.getElementById('ownerTypeFilter');
-                    ownerTypeSelect.innerHTML = '<option value="">All Types</option>';
+                    ownerTypeSelect.innerHTML = '<option value="">👥 Filter by Owner Type</option>';
                     ownerTypes.forEach(type => {
                         ownerTypeSelect.innerHTML += `<option value="${type}">${type}</option>`;
                     });
@@ -894,7 +1012,7 @@
                 if (ownerLoginsResponse.ok) {
                     const ownerLogins = await ownerLoginsResponse.json();
                     const ownerLoginSelect = document.getElementById('ownerLoginFilter');
-                    ownerLoginSelect.innerHTML = '<option value="">All Owners</option>';
+                    ownerLoginSelect.innerHTML = '<option value="">👤 Filter by Owner</option>';
                     ownerLogins.forEach(login => {
                         ownerLoginSelect.innerHTML += `<option value="${login}">${login}</option>`;
                     });
@@ -911,7 +1029,8 @@
              const ownerLoginFilter = document.getElementById('ownerLoginFilter').value;
              const hasEmailFilter = document.getElementById('hasEmailFilter').value;
              const hasLinkedInFilter = document.getElementById('hasLinkedInFilter').value;
-             const contactSourceFilter = document.getElementById('contactSourceFilter').value;
+             const sortByFilter = document.getElementById('sortByFilter').value;
+             const limitFilter = document.getElementById('limitFilter').value;
              const queryBtn = document.getElementById('queryBtn');
              const queryResult = document.getElementById('queryResult');
 
@@ -930,7 +1049,8 @@
                  if (ownerLoginFilter) params.append('owner_login', ownerLoginFilter);
                  if (hasEmailFilter) params.append('has_email', hasEmailFilter);
                  if (hasLinkedInFilter) params.append('has_linkedin', hasLinkedInFilter);
-                 if (contactSourceFilter) params.append('contact_source', contactSourceFilter);
+                 if (sortByFilter) params.append('sort_by', sortByFilter);
+                 if (limitFilter) params.append('limit', limitFilter);
 
                  const response = await fetch(`${API_BASE}/hits?${params}`);
                  if (response.ok) {
@@ -948,8 +1068,39 @@
              queryBtn.innerHTML = '🔍 Query Data';
          }
 
+         // Get top repositories by stars
+         async function getTopRepos() {
+             const markerFilter = document.getElementById('markerFilter').value;
+             const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
+             const limitFilter = document.getElementById('limitFilter').value || '10';
+             const queryResult = document.getElementById('queryResult');
+
+             if (!serverOnline) {
+                 showAlert('Server is offline. Please start the backend server.', 'error');
+                 return;
+             }
+
+             try {
+                 const params = new URLSearchParams();
+                 params.append('limit', limitFilter);
+                 if (markerFilter) params.append('marker', markerFilter);
+                 if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
+
+                 const response = await fetch(`${API_BASE}/top-repos?${params}`);
+                 if (response.ok) {
+                     const data = await response.json();
+                     displayResults(data, 'Top Repositories by Stars');
+                 } else {
+                     const error = await response.json();
+                     showAlert(`Failed to get top repos: ${error.detail}`, 'error');
+                 }
+             } catch (error) {
+                 showAlert(`Failed to get top repos: ${error.message}`, 'error');
+             }
+         }
+
         // Display results
-        function displayResults(data) {
+        function displayResults(data, title = 'Query Results') {
             const queryResult = document.getElementById('queryResult');
             
             if (data.length === 0) {
@@ -959,42 +1110,47 @@
 
             let tableHTML = `
                 <div style="margin-top: 1rem;">
-                    <h4>Results (${data.length} records)</h4>
+                    <h4>${title} (${data.length} records)</h4>
                     <div style="overflow-x: auto;">
-                        <table class="data-table">
-                                                         <thead>
-                                 <tr>
-                                     <th>Marker</th>
-                                     <th>Repository</th>
-                                     <th>File Path</th>
-                                     <th>Owner Type</th>
-                                     <th>Owner</th>
-                                     <th>Stars</th>
-                                     <th>Email</th>
-                                     <th>LinkedIn</th>
-                                 </tr>
-                             </thead>
+                                                 <table class="data-table">
+                                                          <thead>
+                                  <tr>
+                                      <th>Marker</th>
+                                      <th>Repository</th>
+                                      <th>File Path</th>
+                                      <th>Owner Type</th>
+                                      <th>Owner</th>
+                                      <th>Stars ⭐</th>
+                                      <th>Latest Commit</th>
+                                      <th>Email</th>
+                                      <th>LinkedIn</th>
+                                  </tr>
+                              </thead>
                             <tbody>
             `;
 
-                         data.forEach(item => {
-                 // Format contact information
-                 const email = item.owner_email ? `<a href="mailto:${item.owner_email}">${item.owner_email}</a>` : 'N/A';
-                 const linkedin = item.owner_linkedin ? `<a href="${item.owner_linkedin}" target="_blank">LinkedIn</a>` : 'N/A';
-                 
-                 tableHTML += `
-                     <tr>
-                         <td><code>${item.marker}</code></td>
-                         <td><a href="${item.repo_url}" target="_blank">${item.repo_name}</a></td>
-                         <td><code>${item.file_path}</code></td>
-                         <td>${item.owner_type || 'N/A'}</td>
-                         <td>${item.owner_login || 'N/A'}</td>
-                         <td>${item.stars || 0}</td>
-                         <td>${email}</td>
-                         <td>${linkedin}</td>
-                     </tr>
-                 `;
-             });
+                                                   data.forEach(item => {
+                  // Format contact information
+                  const email = item.owner_email ? `<a href="mailto:${item.owner_email}">${item.owner_email}</a>` : 'N/A';
+                  const linkedin = item.owner_linkedin ? `<a href="${item.owner_linkedin}" target="_blank">LinkedIn</a>` : 'N/A';
+                  
+                  // Format commit date
+                  const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
+                  
+                  tableHTML += `
+                      <tr>
+                          <td><code>${item.marker}</code></td>
+                          <td><a href="${item.repo_url}" target="_blank">${item.repo_name}</a></td>
+                          <td><code>${item.file_path}</code></td>
+                          <td>${item.owner_type || 'N/A'}</td>
+                          <td>${item.owner_login || 'N/A'}</td>
+                          <td>${item.stars || 0}</td>
+                          <td>${commitDate}</td>
+                          <td>${email}</td>
+                          <td>${linkedin}</td>
+                      </tr>
+                  `;
+              });
 
             tableHTML += `
                             </tbody>

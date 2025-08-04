@@ -27,16 +27,25 @@ import requests
 from github import Github
 from github.GithubException import RateLimitExceededException, UnknownObjectException
 import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, nullslast
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Configure logging for the module
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Database setup for direct SQLite writing
-DATABASE_URL = "sqlite:///./ai_code_generator.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Database setup - PostgreSQL
+# Use environment variable for DATABASE_URL, fallback to SQLite for local development
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ai_code_generator.db")
+
+# Configure engine based on database type
+if DATABASE_URL.startswith("postgresql"):
+    # PostgreSQL configuration
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+else:
+    # SQLite configuration (for local development)
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -57,6 +66,8 @@ class MarkerHit(Base):
     owner_linkedin = Column(String)
     contact_source = Column(String)  # 'github_profile', 'repo_content', or 'none'
     contact_extracted_at = Column(DateTime, default=datetime.utcnow)
+    # Repository activity fields
+    latest_commit_date = Column(DateTime)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -415,6 +426,9 @@ class GitHubAPIScraper:
                         else:
                             owner_contacts = {'email': None, 'linkedin_url': None, 'source': 'none'}
                         
+                        # Get latest commit date for the repository
+                        latest_commit_date = self.get_latest_commit_date(repo.full_name)
+                        
                         session = SessionLocal()
                         new_hit = MarkerHit(
                             marker=marker,
@@ -429,7 +443,8 @@ class GitHubAPIScraper:
                             owner_email=owner_contacts['email'],
                             owner_linkedin=owner_contacts['linkedin_url'],
                             contact_source=owner_contacts['source'],
-                            contact_extracted_at=datetime.utcnow()
+                            contact_extracted_at=datetime.utcnow(),
+                            latest_commit_date=latest_commit_date
                         )
                         session.add(new_hit)
                         session.commit()
@@ -492,6 +507,30 @@ class GitHubAPIScraper:
         except Exception as e:
             logger.warning(f"Error extracting contact info for {username}: {e}")
             return {'email': None, 'linkedin_url': None, 'source': 'none'}
+
+    def get_latest_commit_date(self, repo_name: str) -> Optional[datetime]:
+        """
+        Get the latest commit date for a repository.
+        
+        Args:
+            repo_name: Full repository name (owner/repo)
+            
+        Returns:
+            datetime object of the latest commit, or None if not found
+        """
+        try:
+            self.check_rate_limit()
+            repo = self.github.get_repo(repo_name)
+            commits = repo.get_commits()
+            
+            if commits.totalCount > 0:
+                latest_commit = commits[0]  # First commit is the latest
+                return latest_commit.commit.author.date
+            else:
+                return None
+        except Exception as e:
+            logger.warning(f"Error getting latest commit date for {repo_name}: {e}")
+            return None
 
     def extract_contacts_from_repo_content(self, repo_name: str) -> Dict[str, Optional[str]]:
         """

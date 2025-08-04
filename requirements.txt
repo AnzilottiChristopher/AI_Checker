@@ -5,3 +5,4 @@ numpy>=1.21.0
 fastapi
 uvicorn
 sqlalchemy
+psycopg2-binary>=2.9.0

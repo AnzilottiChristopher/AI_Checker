@@ -1,7 +1,7 @@
 # backend.py
 """
 FastAPI backend for storing and querying AI code generator marker hits.
-- Uses SQLAlchemy with SQLite for storage.
+- Uses SQLAlchemy with PostgreSQL for storage.
 - Provides endpoints to query/filter results and run the scraper directly to database.
 """
 
@@ -10,14 +10,23 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, nullslast
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 import os
 
-# Database setup
-DATABASE_URL = "sqlite:///./ai_code_generator.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Database setup - PostgreSQL
+# Use environment variable for DATABASE_URL, fallback to SQLite for local development
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ai_code_generator.db")
+
+# Configure engine based on database type
+if DATABASE_URL.startswith("postgresql"):
+    # PostgreSQL configuration
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+else:
+    # SQLite configuration (for local development)
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -39,6 +48,8 @@ class MarkerHit(Base):
     owner_linkedin = Column(String)
     contact_source = Column(String)  # 'github_profile', 'repo_content', or 'none'
     contact_extracted_at = Column(DateTime, default=datetime.utcnow)
+    # Repository activity fields
+    latest_commit_date = Column(DateTime)
 
 # Pydantic model for API responses
 class MarkerHitSchema(BaseModel):
@@ -56,6 +67,7 @@ class MarkerHitSchema(BaseModel):
     owner_linkedin: Optional[str]
     contact_source: Optional[str]
     contact_extracted_at: Optional[datetime]
+    latest_commit_date: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -95,13 +107,27 @@ def list_hits(
     owner_login: Optional[str] = None,
     has_email: Optional[str] = None,
     has_linkedin: Optional[str] = None,
-    contact_source: Optional[str] = None
+    contact_source: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    limit: Optional[int] = None
 ):
     """
-    List all marker hits, with optional filtering by marker, owner_type, owner_login, or contact information.
+    List all marker hits, with optional filtering and sorting.
+    
+    Parameters:
+    - marker: Filter by marker type (e.g., '.claude', '.cursor')
+    - owner_type: Filter by owner type ('User' or 'Organization')
+    - owner_login: Filter by specific owner username
+    - has_email: Filter by whether email is available ('true' or 'false')
+    - has_linkedin: Filter by whether LinkedIn is available ('true' or 'false')
+    - contact_source: Filter by contact source ('github_profile', 'repo_content', 'none')
+    - sort_by: Sort order ('stars_desc', 'stars_asc', 'name_asc', 'name_desc')
+    - limit: Maximum number of results to return
     """
     db = next(get_db())
     query = db.query(MarkerHit)
+    
+    # Apply filters
     if marker:
         query = query.filter(MarkerHit.marker == marker)
     if owner_type:
@@ -120,6 +146,32 @@ def list_hits(
             query = query.filter(MarkerHit.owner_linkedin.is_(None))
     if contact_source:
         query = query.filter(MarkerHit.contact_source == contact_source)
+    
+    # Apply sorting
+    if sort_by:
+        if sort_by == 'stars_desc':
+            query = query.order_by(MarkerHit.stars.desc())
+        elif sort_by == 'stars_asc':
+            query = query.order_by(MarkerHit.stars.asc())
+        elif sort_by == 'commit_desc':
+            query = query.order_by(MarkerHit.latest_commit_date.desc().nullslast())
+        elif sort_by == 'commit_asc':
+            query = query.order_by(MarkerHit.latest_commit_date.asc().nullslast())
+        elif sort_by == 'name_asc':
+            query = query.order_by(MarkerHit.repo_name.asc())
+        elif sort_by == 'name_desc':
+            query = query.order_by(MarkerHit.repo_name.desc())
+        else:
+            # Default to most recent first
+            query = query.order_by(MarkerHit.id.desc())
+    else:
+        # Default to most recent first
+        query = query.order_by(MarkerHit.id.desc())
+    
+    # Apply limit
+    if limit:
+        query = query.limit(limit)
+    
     return query.all()
 
 @app.get("/markers", response_model=List[str])
@@ -148,6 +200,34 @@ def list_owner_logins():
     db = next(get_db())
     owner_logins = db.query(MarkerHit.owner_login).distinct().all()
     return [o[0] for o in owner_logins if o[0]]
+
+@app.get("/top-repos", response_model=List[MarkerHitSchema])
+def get_top_repositories(
+    limit: int = 10,
+    marker: Optional[str] = None,
+    owner_type: Optional[str] = None
+):
+    """
+    Get top repositories by star count.
+    
+    Parameters:
+    - limit: Number of top repositories to return (default: 10)
+    - marker: Filter by marker type (e.g., '.claude', '.cursor')
+    - owner_type: Filter by owner type ('User' or 'Organization')
+    """
+    db = next(get_db())
+    query = db.query(MarkerHit)
+    
+    # Apply filters
+    if marker:
+        query = query.filter(MarkerHit.marker == marker)
+    if owner_type:
+        query = query.filter(MarkerHit.owner_type == owner_type)
+    
+    # Sort by stars descending and limit results
+    query = query.order_by(MarkerHit.stars.desc()).limit(limit)
+    
+    return query.all()
 
 @app.get("/contacts")
 def get_contacts(
