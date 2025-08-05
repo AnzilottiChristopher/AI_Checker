@@ -77,7 +77,7 @@ def migrate_sqlite_to_postgresql():
             owner_type VARCHAR,
             owner_login VARCHAR,
             owner_email VARCHAR,
-            owner_linkedin VARCHAR,
+        
             contact_source VARCHAR,
             contact_extracted_at TIMESTAMP
         );
@@ -90,7 +90,7 @@ def migrate_sqlite_to_postgresql():
         insert_sql = """
         INSERT INTO marker_hits 
         (marker, repo_name, repo_url, file_path, file_url, stars, description, 
-         owner_type, owner_login, owner_email, owner_linkedin, contact_source, contact_extracted_at)
+         owner_type, owner_login, owner_email, contact_source, contact_extracted_at)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         
@@ -107,7 +107,7 @@ def migrate_sqlite_to_postgresql():
                 row[8],  # owner_type
                 row[9],  # owner_login
                 row[10], # owner_email
-                row[11], # owner_linkedin
+    
                 row[12], # contact_source
                 row[13]  # contact_extracted_at
             )

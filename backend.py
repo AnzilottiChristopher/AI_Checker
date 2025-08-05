@@ -5,7 +5,7 @@ FastAPI backend for storing and querying AI code generator marker hits.
 - Provides endpoints to query/filter results and run the scraper directly to database.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -21,8 +21,15 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ai_code_generator.db")
 
 # Configure engine based on database type
 if DATABASE_URL.startswith("postgresql"):
-    # PostgreSQL configuration
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+    # PostgreSQL configuration with improved connection pool settings
+    engine = create_engine(
+        DATABASE_URL, 
+        pool_pre_ping=True, 
+        pool_recycle=300,
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30
+    )
 else:
     # SQLite configuration (for local development)
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -45,7 +52,6 @@ class MarkerHit(Base):
     owner_login = Column(String, index=True)
     # Contact information fields
     owner_email = Column(String)
-    owner_linkedin = Column(String)
     contact_source = Column(String)  # 'github_profile', 'repo_content', or 'none'
     contact_extracted_at = Column(DateTime, default=datetime.utcnow)
     # Repository activity fields
@@ -64,7 +70,6 @@ class MarkerHitSchema(BaseModel):
     owner_type: str
     owner_login: str
     owner_email: Optional[str]
-    owner_linkedin: Optional[str]
     contact_source: Optional[str]
     contact_extracted_at: Optional[datetime]
     latest_commit_date: Optional[datetime]
@@ -102,11 +107,11 @@ def get_db():
 
 @app.get("/hits", response_model=List[MarkerHitSchema])
 def list_hits(
-    marker: Optional[str] = None, 
+    marker: Optional[List[str]] = Query(None), 
     owner_type: Optional[str] = None, 
     owner_login: Optional[str] = None,
     has_email: Optional[str] = None,
-    has_linkedin: Optional[str] = None,
+
     contact_source: Optional[str] = None,
     sort_by: Optional[str] = None,
     limit: Optional[int] = None
@@ -115,96 +120,113 @@ def list_hits(
     List all marker hits, with optional filtering and sorting.
     
     Parameters:
-    - marker: Filter by marker type (e.g., '.claude', '.cursor')
+    - marker: Filter by marker type (e.g., '.claude', '.cursor') - can be a list for multiple markers
     - owner_type: Filter by owner type ('User' or 'Organization')
     - owner_login: Filter by specific owner username
     - has_email: Filter by whether email is available ('true' or 'false')
-    - has_linkedin: Filter by whether LinkedIn is available ('true' or 'false')
+
     - contact_source: Filter by contact source ('github_profile', 'repo_content', 'none')
     - sort_by: Sort order ('stars_desc', 'stars_asc', 'name_asc', 'name_desc')
     - limit: Maximum number of results to return
     """
-    db = next(get_db())
-    query = db.query(MarkerHit)
+    # Debug: Print received parameters
+    print(f"DEBUG: Received marker parameter: {marker} (type: {type(marker)})")
     
-    # Apply filters
-    if marker:
-        query = query.filter(MarkerHit.marker == marker)
-    if owner_type:
-        query = query.filter(MarkerHit.owner_type == owner_type)
-    if owner_login:
-        query = query.filter(MarkerHit.owner_login == owner_login)
-    if has_email:
-        if has_email.lower() == 'true':
-            query = query.filter(MarkerHit.owner_email.isnot(None))
-        elif has_email.lower() == 'false':
-            query = query.filter(MarkerHit.owner_email.is_(None))
-    if has_linkedin:
-        if has_linkedin.lower() == 'true':
-            query = query.filter(MarkerHit.owner_linkedin.isnot(None))
-        elif has_linkedin.lower() == 'false':
-            query = query.filter(MarkerHit.owner_linkedin.is_(None))
-    if contact_source:
-        query = query.filter(MarkerHit.contact_source == contact_source)
-    
-    # Apply sorting
-    if sort_by:
-        if sort_by == 'stars_desc':
-            query = query.order_by(MarkerHit.stars.desc())
-        elif sort_by == 'stars_asc':
-            query = query.order_by(MarkerHit.stars.asc())
-        elif sort_by == 'commit_desc':
-            query = query.order_by(MarkerHit.latest_commit_date.desc().nullslast())
-        elif sort_by == 'commit_asc':
-            query = query.order_by(MarkerHit.latest_commit_date.asc().nullslast())
-        elif sort_by == 'name_asc':
-            query = query.order_by(MarkerHit.repo_name.asc())
-        elif sort_by == 'name_desc':
-            query = query.order_by(MarkerHit.repo_name.desc())
+    db = SessionLocal()
+    try:
+        query = db.query(MarkerHit)
+        
+        # Apply filters
+        if marker:
+            print(f"DEBUG: Applying marker filter: {marker}")
+            if isinstance(marker, list) and len(marker) > 0:
+                query = query.filter(MarkerHit.marker.in_(marker))
+                print(f"DEBUG: Using IN filter with markers: {marker}")
+            elif isinstance(marker, str):
+                query = query.filter(MarkerHit.marker == marker)
+                print(f"DEBUG: Using equality filter with marker: {marker}")
+        if owner_type:
+            query = query.filter(MarkerHit.owner_type == owner_type)
+        if owner_login:
+            query = query.filter(MarkerHit.owner_login == owner_login)
+        if has_email:
+            if has_email.lower() == 'true':
+                query = query.filter(MarkerHit.owner_email.isnot(None))
+            elif has_email.lower() == 'false':
+                query = query.filter(MarkerHit.owner_email.is_(None))
+
+        if contact_source:
+            query = query.filter(MarkerHit.contact_source == contact_source)
+        
+        # Apply sorting
+        if sort_by:
+            if sort_by == 'stars_desc':
+                query = query.order_by(MarkerHit.stars.desc())
+            elif sort_by == 'stars_asc':
+                query = query.order_by(MarkerHit.stars.asc())
+            elif sort_by == 'commit_desc':
+                query = query.order_by(MarkerHit.latest_commit_date.desc().nullslast())
+            elif sort_by == 'commit_asc':
+                query = query.order_by(MarkerHit.latest_commit_date.asc().nullslast())
+            elif sort_by == 'name_asc':
+                query = query.order_by(MarkerHit.repo_name.asc())
+            elif sort_by == 'name_desc':
+                query = query.order_by(MarkerHit.repo_name.desc())
+            else:
+                # Default to most recent first
+                query = query.order_by(MarkerHit.id.desc())
         else:
             # Default to most recent first
             query = query.order_by(MarkerHit.id.desc())
-    else:
-        # Default to most recent first
-        query = query.order_by(MarkerHit.id.desc())
-    
-    # Apply limit
-    if limit:
-        query = query.limit(limit)
-    
-    return query.all()
+        
+        # Apply limit
+        if limit:
+            query = query.limit(limit)
+        
+        return query.all()
+    finally:
+        db.close()
 
 @app.get("/markers", response_model=List[str])
 def list_markers():
     """
     List all unique marker types in the database.
     """
-    db = next(get_db())
-    markers = db.query(MarkerHit.marker).distinct().all()
-    return [m[0] for m in markers]
+    db = SessionLocal()
+    try:
+        markers = db.query(MarkerHit.marker).distinct().all()
+        return [m[0] for m in markers]
+    finally:
+        db.close()
 
 @app.get("/owner_types", response_model=List[str])
 def list_owner_types():
     """
     List all unique owner types (User, Organization) in the database.
     """
-    db = next(get_db())
-    owner_types = db.query(MarkerHit.owner_type).distinct().all()
-    return [o[0] for o in owner_types if o[0]]
+    db = SessionLocal()
+    try:
+        owner_types = db.query(MarkerHit.owner_type).distinct().all()
+        return [o[0] for o in owner_types if o[0]]
+    finally:
+        db.close()
 
 @app.get("/owner_logins", response_model=List[str])
 def list_owner_logins():
     """
     List all unique owner logins (user/org names) in the database.
     """
-    db = next(get_db())
-    owner_logins = db.query(MarkerHit.owner_login).distinct().all()
-    return [o[0] for o in owner_logins if o[0]]
+    db = SessionLocal()
+    try:
+        owner_logins = db.query(MarkerHit.owner_login).distinct().all()
+        return [o[0] for o in owner_logins if o[0]]
+    finally:
+        db.close()
 
 @app.get("/top-repos", response_model=List[MarkerHitSchema])
 def get_top_repositories(
     limit: int = 10,
-    marker: Optional[str] = None,
+    marker: Optional[List[str]] = None,
     owner_type: Optional[str] = None
 ):
     """
@@ -215,73 +237,77 @@ def get_top_repositories(
     - marker: Filter by marker type (e.g., '.claude', '.cursor')
     - owner_type: Filter by owner type ('User' or 'Organization')
     """
-    db = next(get_db())
-    query = db.query(MarkerHit)
-    
-    # Apply filters
-    if marker:
-        query = query.filter(MarkerHit.marker == marker)
-    if owner_type:
-        query = query.filter(MarkerHit.owner_type == owner_type)
-    
-    # Sort by stars descending and limit results
-    query = query.order_by(MarkerHit.stars.desc()).limit(limit)
-    
-    return query.all()
+    db = SessionLocal()
+    try:
+        query = db.query(MarkerHit)
+        
+        # Apply filters
+        if marker:
+            if isinstance(marker, list) and len(marker) > 0:
+                query = query.filter(MarkerHit.marker.in_(marker))
+            elif isinstance(marker, str):
+                query = query.filter(MarkerHit.marker == marker)
+        if owner_type:
+            query = query.filter(MarkerHit.owner_type == owner_type)
+        
+        # Sort by stars descending and limit results
+        query = query.order_by(MarkerHit.stars.desc()).limit(limit)
+        
+        return query.all()
+    finally:
+        db.close()
 
 @app.get("/contacts")
 def get_contacts(
     username: Optional[str] = None,
     has_email: Optional[bool] = None,
-    has_linkedin: Optional[bool] = None,
+
     contact_source: Optional[str] = None
 ):
     """
     Get contact information for users with optional filtering.
     """
-    db = next(get_db())
-    query = db.query(MarkerHit)
-    
-    if username:
-        query = query.filter(MarkerHit.owner_login == username)
-    if has_email is not None:
-        if has_email:
-            query = query.filter(MarkerHit.owner_email.isnot(None))
-        else:
-            query = query.filter(MarkerHit.owner_email.is_(None))
-    if has_linkedin is not None:
-        if has_linkedin:
-            query = query.filter(MarkerHit.owner_linkedin.isnot(None))
-        else:
-            query = query.filter(MarkerHit.owner_linkedin.is_(None))
-    if contact_source:
-        query = query.filter(MarkerHit.contact_source == contact_source)
-    
-    return query.all()
+    db = SessionLocal()
+    try:
+        query = db.query(MarkerHit)
+        
+        if username:
+            query = query.filter(MarkerHit.owner_login == username)
+        if has_email is not None:
+            if has_email:
+                query = query.filter(MarkerHit.owner_email.isnot(None))
+            else:
+                query = query.filter(MarkerHit.owner_email.is_(None))
+
+        if contact_source:
+            query = query.filter(MarkerHit.contact_source == contact_source)
+        
+        return query.all()
+    finally:
+        db.close()
 
 @app.get("/contact-stats")
 def get_contact_stats():
     """
     Get statistics about contact information collection.
     """
-    db = next(get_db())
-    
-    total_records = db.query(MarkerHit).count()
-    records_with_email = db.query(MarkerHit).filter(MarkerHit.owner_email.isnot(None)).count()
-    records_with_linkedin = db.query(MarkerHit).filter(MarkerHit.owner_linkedin.isnot(None)).count()
-    records_with_any_contact = db.query(MarkerHit).filter(
-        (MarkerHit.owner_email.isnot(None)) | (MarkerHit.owner_linkedin.isnot(None))
-    ).count()
-    
-    return {
-        "total_records": total_records,
-        "records_with_email": records_with_email,
-        "records_with_linkedin": records_with_linkedin,
-        "records_with_any_contact": records_with_any_contact,
-        "email_percentage": round((records_with_email / total_records * 100), 2) if total_records > 0 else 0,
-        "linkedin_percentage": round((records_with_linkedin / total_records * 100), 2) if total_records > 0 else 0,
-        "any_contact_percentage": round((records_with_any_contact / total_records * 100), 2) if total_records > 0 else 0
-    }
+    db = SessionLocal()
+    try:
+        total_records = db.query(MarkerHit).count()
+        records_with_email = db.query(MarkerHit).filter(MarkerHit.owner_email.isnot(None)).count()
+        records_with_any_contact = db.query(MarkerHit).filter(
+            MarkerHit.owner_email.isnot(None)
+        ).count()
+        
+        return {
+            "total_records": total_records,
+            "records_with_email": records_with_email,
+            "records_with_any_contact": records_with_any_contact,
+            "email_percentage": round((records_with_email / total_records * 100), 2) if total_records > 0 else 0,
+            "any_contact_percentage": round((records_with_any_contact / total_records * 100), 2) if total_records > 0 else 0
+        }
+    finally:
+        db.close()
 
 @app.get("/health")
 def health_check():

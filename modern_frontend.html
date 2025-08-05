@@ -497,6 +497,123 @@
             animation: spin 1s linear infinite;
         }
 
+        /* Export Dropdown */
+        .export-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: hsl(var(--card));
+            border: 1px solid hsl(var(--border));
+            border-radius: calc(var(--radius) - 2px);
+            box-shadow: var(--shadow-elevated);
+            min-width: 200px;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+        }
+
+        .dropdown-menu.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .dropdown-item {
+            display: block;
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: none;
+            border: none;
+            color: hsl(var(--foreground));
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .dropdown-item:hover {
+            background: hsl(var(--muted));
+        }
+
+        /* Marker Dropdown */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-toggle {
+            background: none;
+            border: none;
+            color: hsl(var(--foreground));
+            cursor: pointer;
+            padding: 0.5rem 0.75rem;
+            border-radius: calc(var(--radius) - 2px);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .dropdown-toggle:hover {
+            background: hsl(var(--muted));
+        }
+
+        .dropdown-content {
+            padding: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .marker-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0;
+            cursor: pointer;
+        }
+
+        .marker-checkbox:hover {
+            background: hsl(var(--muted));
+            border-radius: calc(var(--radius) - 4px);
+        }
+
+        .marker-checkbox input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .marker-checkbox label {
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: hsl(var(--foreground));
+        }
+
+        /* Exported Entry Styling */
+        .exported-entry {
+            opacity: 0.6;
+            background: hsl(var(--muted) / 0.3) !important;
+        }
+
+        .exported-entry td {
+            color: hsl(var(--muted-foreground)) !important;
+        }
+
+        .exported-entry .marker-badge {
+            opacity: 0.7;
+        }
+
+        .exported-entry .repo-link {
+            color: hsl(var(--muted-foreground)) !important;
+        }
+
+        .exported-entry .email-link {
+            color: hsl(var(--muted-foreground)) !important;
+        }
+
         /* Footer */
         .footer {
             border-top: 1px solid hsl(var(--border));
@@ -515,23 +632,35 @@
         }
 
                  /* Data Display */
+         .table-wrapper {
+             max-height: 70vh;
+             overflow-y: auto;
+             border: 1px solid hsl(var(--border));
+             border-radius: calc(var(--radius) - 2px);
+         }
+         
          .data-table {
              width: 100%;
              border-collapse: collapse;
              margin-top: 1rem;
+             font-size: 0.75rem;
          }
  
          .data-table th,
          .data-table td {
-             padding: 0.75rem;
+             padding: 0.4rem 0.5rem;
              text-align: left;
              border-bottom: 1px solid hsl(var(--border));
+             line-height: 1.2;
+             vertical-align: top;
          }
  
          .data-table th {
              font-weight: 600;
              color: hsl(var(--muted-foreground));
-             font-size: 0.875rem;
+             font-size: 0.7rem;
+             text-transform: uppercase;
+             letter-spacing: 0.5px;
          }
  
          .data-table tr:hover {
@@ -548,6 +677,132 @@
          .data-table a:hover {
              color: hsl(200 100% 85%); /* Even brighter on hover */
              text-decoration: underline;
+         }
+         
+         /* Code snippets in table */
+         .data-table code {
+             background: hsl(var(--muted));
+             padding: 0.125rem 0.25rem;
+             border-radius: calc(var(--radius) - 4px);
+             font-size: 0.75rem;
+             font-family: monospace;
+         }
+
+         /* Compact List Design */
+         .compact-list {
+             display: flex;
+             flex-direction: column;
+             gap: 0.5rem;
+             margin-top: 1rem;
+         }
+
+         .list-item {
+             background: hsl(var(--card));
+             border: 1px solid hsl(var(--border));
+             border-radius: calc(var(--radius) - 2px);
+             cursor: pointer;
+             transition: all 0.2s ease;
+             overflow: hidden;
+         }
+
+         .list-item:hover {
+             border-color: hsl(var(--primary));
+             box-shadow: 0 2px 8px hsl(var(--primary) / 0.1);
+         }
+
+         .list-item.expanded {
+             border-color: hsl(var(--primary));
+             box-shadow: 0 4px 12px hsl(var(--primary) / 0.15);
+         }
+
+         .item-header {
+             display: flex;
+             align-items: center;
+             justify-content: space-between;
+             padding: 0.75rem 1rem;
+             background: hsl(var(--card));
+         }
+
+         .item-main {
+             display: flex;
+             align-items: center;
+             gap: 1rem;
+             flex: 1;
+         }
+
+         .marker-badge {
+             background: hsl(var(--primary));
+             color: hsl(var(--primary-foreground));
+             padding: 0.25rem 0.5rem;
+             border-radius: calc(var(--radius) - 4px);
+             font-size: 0.75rem;
+             font-weight: 600;
+             font-family: monospace;
+         }
+
+         .repo-link {
+             color: hsl(var(--primary));
+             text-decoration: none;
+             font-weight: 500;
+             transition: color 0.2s ease;
+         }
+
+         .repo-link:hover {
+             color: hsl(var(--primary) / 0.8);
+             text-decoration: underline;
+         }
+
+         .stars {
+             color: hsl(var(--muted-foreground));
+             font-size: 0.875rem;
+         }
+
+         .email-link {
+             color: hsl(var(--success));
+             text-decoration: none;
+             font-size: 0.875rem;
+             transition: color 0.2s ease;
+         }
+
+         .email-link:hover {
+             color: hsl(var(--success) / 0.8);
+             text-decoration: underline;
+         }
+
+         .item-toggle {
+             color: hsl(var(--muted-foreground));
+             font-size: 0.75rem;
+             transition: transform 0.2s ease;
+         }
+
+         .item-details {
+             background: hsl(var(--card-secondary));
+             border-top: 1px solid hsl(var(--border));
+             padding: 1rem;
+         }
+
+         .details-grid {
+             display: grid;
+             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+             gap: 1rem;
+         }
+
+         .detail-item {
+             font-size: 0.875rem;
+             line-height: 1.4;
+         }
+
+         .detail-item strong {
+             color: hsl(var(--muted-foreground));
+             font-weight: 600;
+         }
+
+         .detail-item code {
+             background: hsl(var(--muted));
+             padding: 0.125rem 0.25rem;
+             border-radius: calc(var(--radius) - 4px);
+             font-size: 0.75rem;
+             font-family: monospace;
          }
 
         /* Alerts */
@@ -675,7 +930,7 @@
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" id="extractContacts" checked style="width: auto;">
                                 <label for="extractContacts" style="margin: 0; font-size: 0.875rem;">
-                                    Extract emails and LinkedIn profiles
+                                                                         Extract emails
                                 </label>
                             </div>
                             <small style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">
@@ -719,9 +974,20 @@
                         <div class="filter-bar">
                             <div class="filter-chips">
                                 <div class="filter-chip">
-                                    <select class="chip-select" id="markerFilter">
-                                        <option value="">🎯 Filter by Marker</option>
-                                    </select>
+                                    <div class="dropdown">
+                                        <button class="chip-select dropdown-toggle" id="markerFilterBtn" onclick="toggleMarkerDropdown()">
+                                            🎯 Filter by Marker ▼
+                                        </button>
+                                        <div class="dropdown-menu" id="markerDropdown">
+                                            <div class="dropdown-content">
+                                                <div class="marker-checkbox" style="border-bottom: 1px solid hsl(var(--border)); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                                                    <input type="checkbox" id="selectAllMarkers" onchange="toggleAllMarkers()">
+                                                    <label for="selectAllMarkers" style="font-weight: bold;">Select All</label>
+                                                </div>
+                                                <!-- Checkboxes will be populated here -->
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="filter-chip">
                                     <select class="chip-select" id="ownerTypeFilter">
@@ -731,24 +997,13 @@
                                     </select>
                                 </div>
                                 <div class="filter-chip">
-                                    <select class="chip-select" id="ownerLoginFilter">
-                                        <option value="">👤 Filter by Owner</option>
-                                    </select>
-                                </div>
-                                <div class="filter-chip">
                                     <select class="chip-select" id="hasEmailFilter">
                                         <option value="">📧 Filter by Email</option>
                                         <option value="true">✅ Has Email</option>
                                         <option value="false">❌ No Email</option>
                                     </select>
                                 </div>
-                                <div class="filter-chip">
-                                    <select class="chip-select" id="hasLinkedInFilter">
-                                        <option value="">💼 Filter by LinkedIn</option>
-                                        <option value="true">✅ Has LinkedIn</option>
-                                        <option value="false">❌ No LinkedIn</option>
-                                    </select>
-                                </div>
+                                
                                                                  <div class="filter-chip">
                                      <select class="chip-select" id="sortByFilter">
                                          <option value="stars_desc">⭐ Sort by Most Stars</option>
@@ -779,9 +1034,22 @@
                             <button class="btn" onclick="queryData()" id="queryBtn">
                                 🔍 Query Data
                             </button>
-                            <button class="btn btn-outline" onclick="exportData()" id="exportBtn">
-                                📤 Export
-                            </button>
+                            <div class="export-dropdown">
+                                <button class="btn btn-outline" onclick="toggleExportDropdown()" id="exportBtn">
+                                    📤 Export ▼
+                                </button>
+                                <div class="dropdown-menu" id="exportDropdown">
+                                    <button class="dropdown-item" onclick="exportData('all')">
+                                        📤 Export All Selected
+                                    </button>
+                                    <button class="dropdown-item" onclick="exportData('new')">
+                                        🆕 Export New Only
+                                    </button>
+                                    <button class="dropdown-item" onclick="clearExportHistory()">
+                                        🗑️ Clear Export History
+                                    </button>
+                                </div>
+                            </div>
                             <button class="btn btn-outline" onclick="loadContactStats()" id="statsBtn">
                                 📊 Stats
                             </button>
@@ -805,8 +1073,43 @@
     </footer>
 
     <script>
-        const API_BASE = 'http://127.0.0.1:8000';
+        const API_BASE = 'http://localhost:8000';
         let serverOnline = false;
+
+        // localStorage functions for export tracking
+        function getExportedEntries() {
+            const exported = localStorage.getItem('exportedEntries');
+            return exported ? JSON.parse(exported) : [];
+        }
+
+        function addExportedEntry(entryId) {
+            const exported = getExportedEntries();
+            if (!exported.includes(entryId)) {
+                exported.push(entryId);
+                localStorage.setItem('exportedEntries', JSON.stringify(exported));
+            }
+        }
+
+        function isEntryExported(entryId) {
+            const exported = getExportedEntries();
+            return exported.includes(entryId);
+        }
+
+        function clearExportHistory() {
+            localStorage.removeItem('exportedEntries');
+            showAlert('Export history cleared!', 'success');
+            // Refresh the current display to update visual state
+            const queryResult = document.getElementById('queryResult');
+            if (queryResult.innerHTML.includes('data-table')) {
+                // Re-query data to refresh the display
+                queryData();
+            }
+        }
+
+        // Generate unique entry ID
+        function generateEntryId(item) {
+            return `${item.marker}-${item.repo_name}-${item.file_path}`;
+        }
 
         // Initialize the app
         document.addEventListener('DOMContentLoaded', function() {
@@ -837,6 +1140,8 @@
                         serverOnline = true;
                         statusBadge.className = 'status-badge online';
                         statusText.textContent = 'Online';
+                        // Load filters when server comes online
+                        loadFilters();
                     } else {
                         serverOnline = false;
                         statusBadge.className = 'status-badge offline';
@@ -980,20 +1285,107 @@
             }
         }
 
+        // Marker dropdown functions
+        function toggleMarkerDropdown() {
+            const dropdown = document.getElementById('markerDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        function updateMarkerFilter() {
+            const checkboxes = document.querySelectorAll('#markerDropdown input[type="checkbox"]:checked:not(#selectAllMarkers)');
+            const selectedMarkers = Array.from(checkboxes).map(cb => cb.value);
+            const button = document.getElementById('markerFilterBtn');
+            
+            // Update "Select All" checkbox state
+            const selectAllCheckbox = document.getElementById('selectAllMarkers');
+            const markerCheckboxes = document.querySelectorAll('#markerDropdown input[type="checkbox"]:not(#selectAllMarkers)');
+            const allMarkersChecked = Array.from(markerCheckboxes).every(cb => cb.checked);
+            const anyMarkersChecked = Array.from(markerCheckboxes).some(cb => cb.checked);
+            
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = allMarkersChecked;
+                selectAllCheckbox.indeterminate = anyMarkersChecked && !allMarkersChecked;
+            }
+            
+            if (selectedMarkers.length === 0) {
+                button.textContent = '🎯 Filter by Marker ▼';
+            } else if (selectedMarkers.length === 1) {
+                button.textContent = `🎯 ${selectedMarkers[0]} ▼`;
+            } else {
+                button.textContent = `🎯 ${selectedMarkers.length} markers ▼`;
+            }
+        }
+
+        function toggleAllMarkers() {
+            const selectAllCheckbox = document.getElementById('selectAllMarkers');
+            const markerCheckboxes = document.querySelectorAll('#markerDropdown input[type="checkbox"]:not(#selectAllMarkers)');
+            
+            markerCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateMarkerFilter();
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('markerDropdown');
+            const button = document.getElementById('markerFilterBtn');
+            
+            if (!dropdown.contains(event.target) && !button.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
         // Load filters
         async function loadFilters() {
-            if (!serverOnline) return;
+            console.log('loadFilters called, serverOnline:', serverOnline);
+            if (!serverOnline) {
+                console.log('Server is offline, skipping filter load');
+                return;
+            }
 
             try {
                 // Load markers
+                console.log('Fetching markers from:', `${API_BASE}/markers`);
                 const markersResponse = await fetch(`${API_BASE}/markers`);
+                console.log('Markers response status:', markersResponse.status);
                 if (markersResponse.ok) {
                     const markers = await markersResponse.json();
-                    const markerSelect = document.getElementById('markerFilter');
-                    markerSelect.innerHTML = '<option value="">🎯 Filter by Marker</option>';
+                    console.log('Markers received:', markers);
+                    const markerDropdown = document.getElementById('markerDropdown');
+                    const dropdownContent = markerDropdown.querySelector('.dropdown-content');
+                    
+                    // Preserve the "Select All" checkbox
+                    const selectAllDiv = dropdownContent.querySelector('.marker-checkbox:first-child');
+                    dropdownContent.innerHTML = '';
+                    
+                    // Re-add the "Select All" checkbox
+                    if (selectAllDiv) {
+                        dropdownContent.appendChild(selectAllDiv);
+                    } else {
+                        const selectAllDiv = document.createElement('div');
+                        selectAllDiv.className = 'marker-checkbox';
+                        selectAllDiv.style = 'border-bottom: 1px solid hsl(var(--border)); padding-bottom: 0.5rem; margin-bottom: 0.5rem;';
+                        selectAllDiv.innerHTML = `
+                            <input type="checkbox" id="selectAllMarkers" onchange="toggleAllMarkers()">
+                            <label for="selectAllMarkers" style="font-weight: bold;">Select All</label>
+                        `;
+                        dropdownContent.appendChild(selectAllDiv);
+                    }
+                    
                     markers.forEach(marker => {
-                        markerSelect.innerHTML += `<option value="${marker}">${marker}</option>`;
+                        const checkboxDiv = document.createElement('div');
+                        checkboxDiv.className = 'marker-checkbox';
+                        checkboxDiv.innerHTML = `
+                            <input type="checkbox" id="marker_${marker}" value="${marker}" onchange="updateMarkerFilter()">
+                            <label for="marker_${marker}">${marker}</label>
+                        `;
+                        dropdownContent.appendChild(checkboxDiv);
                     });
+                    console.log('Markers dropdown populated with', markers.length, 'items');
+                } else {
+                    console.error('Failed to fetch markers:', markersResponse.status, markersResponse.statusText);
                 }
 
                 // Load owner types
@@ -1006,17 +1398,6 @@
                         ownerTypeSelect.innerHTML += `<option value="${type}">${type}</option>`;
                     });
                 }
-
-                // Load owner logins
-                const ownerLoginsResponse = await fetch(`${API_BASE}/owner_logins`);
-                if (ownerLoginsResponse.ok) {
-                    const ownerLogins = await ownerLoginsResponse.json();
-                    const ownerLoginSelect = document.getElementById('ownerLoginFilter');
-                    ownerLoginSelect.innerHTML = '<option value="">👤 Filter by Owner</option>';
-                    ownerLogins.forEach(login => {
-                        ownerLoginSelect.innerHTML += `<option value="${login}">${login}</option>`;
-                    });
-                }
             } catch (error) {
                 console.error('Error loading filters:', error);
             }
@@ -1024,11 +1405,10 @@
 
                  // Query data
          async function queryData() {
-             const markerFilter = document.getElementById('markerFilter').value;
+             const selectedMarkers = Array.from(document.querySelectorAll('#markerDropdown input[type="checkbox"]:checked:not(#selectAllMarkers)')).map(cb => cb.value);
              const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
-             const ownerLoginFilter = document.getElementById('ownerLoginFilter').value;
              const hasEmailFilter = document.getElementById('hasEmailFilter').value;
-             const hasLinkedInFilter = document.getElementById('hasLinkedInFilter').value;
+
              const sortByFilter = document.getElementById('sortByFilter').value;
              const limitFilter = document.getElementById('limitFilter').value;
              const queryBtn = document.getElementById('queryBtn');
@@ -1044,17 +1424,25 @@
 
              try {
                  const params = new URLSearchParams();
-                 if (markerFilter) params.append('marker', markerFilter);
+                 if (selectedMarkers.length > 0) {
+                     selectedMarkers.forEach(marker => params.append('marker', marker));
+                 }
                  if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
-                 if (ownerLoginFilter) params.append('owner_login', ownerLoginFilter);
                  if (hasEmailFilter) params.append('has_email', hasEmailFilter);
-                 if (hasLinkedInFilter) params.append('has_linkedin', hasLinkedInFilter);
+
                  if (sortByFilter) params.append('sort_by', sortByFilter);
                  if (limitFilter) params.append('limit', limitFilter);
 
                  const response = await fetch(`${API_BASE}/hits?${params}`);
                  if (response.ok) {
                      const data = await response.json();
+                     
+                     // Debug: Log the first few results to verify sorting
+                     console.log('Query results (first 5):', data.slice(0, 5).map(item => ({
+                         repo: item.repo_name,
+                         stars: item.stars
+                     })));
+                     
                      displayResults(data);
                  } else {
                      const error = await response.json();
@@ -1070,7 +1458,7 @@
 
          // Get top repositories by stars
          async function getTopRepos() {
-             const markerFilter = document.getElementById('markerFilter').value;
+             const selectedMarkers = Array.from(document.querySelectorAll('#markerDropdown input[type="checkbox"]:checked:not(#selectAllMarkers)')).map(cb => cb.value);
              const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
              const limitFilter = document.getElementById('limitFilter').value || '10';
              const queryResult = document.getElementById('queryResult');
@@ -1083,12 +1471,21 @@
              try {
                  const params = new URLSearchParams();
                  params.append('limit', limitFilter);
-                 if (markerFilter) params.append('marker', markerFilter);
+                 if (selectedMarkers.length > 0) {
+                     selectedMarkers.forEach(marker => params.append('marker', marker));
+                 }
                  if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
 
                  const response = await fetch(`${API_BASE}/top-repos?${params}`);
                  if (response.ok) {
                      const data = await response.json();
+                     
+                     // Debug: Log the first few results to verify sorting
+                     console.log('Top repos results (first 5):', data.slice(0, 5).map(item => ({
+                         repo: item.repo_name,
+                         stars: item.stars
+                     })));
+                     
                      displayResults(data, 'Top Repositories by Stars');
                  } else {
                      const error = await response.json();
@@ -1098,6 +1495,22 @@
                  showAlert(`Failed to get top repos: ${error.message}`, 'error');
              }
          }
+
+        // Toggle export dropdown
+        function toggleExportDropdown() {
+            const dropdown = document.getElementById('exportDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('exportDropdown');
+            const exportBtn = document.getElementById('exportBtn');
+            
+            if (dropdown && !exportBtn.contains(event.target) && !dropdown.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
 
         // Display results
         function displayResults(data, title = 'Query Results') {
@@ -1111,46 +1524,61 @@
             let tableHTML = `
                 <div style="margin-top: 1rem;">
                     <h4>${title} (${data.length} records)</h4>
-                    <div style="overflow-x: auto;">
-                                                 <table class="data-table">
-                                                          <thead>
-                                  <tr>
-                                      <th>Marker</th>
-                                      <th>Repository</th>
-                                      <th>File Path</th>
-                                      <th>Owner Type</th>
-                                      <th>Owner</th>
-                                      <th>Stars ⭐</th>
-                                      <th>Latest Commit</th>
-                                      <th>Email</th>
-                                      <th>LinkedIn</th>
-                                  </tr>
-                              </thead>
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                            <input type="checkbox" id="selectAll" checked style="width: auto;">
+                            Select All
+                        </label>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">✓</th>
+                                    <th>Marker</th>
+                                    <th>Repository</th>
+                                    <th>File Path</th>
+                                    <th>Owner</th>
+                                    <th>Stars</th>
+                                    <th>Latest Commit</th>
+                                    <th>Email</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
                             <tbody>
             `;
 
-                                                   data.forEach(item => {
-                  // Format contact information
-                  const email = item.owner_email ? `<a href="mailto:${item.owner_email}">${item.owner_email}</a>` : 'N/A';
-                  const linkedin = item.owner_linkedin ? `<a href="${item.owner_linkedin}" target="_blank">LinkedIn</a>` : 'N/A';
-                  
-                  // Format commit date
-                  const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
-                  
-                  tableHTML += `
-                      <tr>
-                          <td><code>${item.marker}</code></td>
-                          <td><a href="${item.repo_url}" target="_blank">${item.repo_name}</a></td>
-                          <td><code>${item.file_path}</code></td>
-                          <td>${item.owner_type || 'N/A'}</td>
-                          <td>${item.owner_login || 'N/A'}</td>
-                          <td>${item.stars || 0}</td>
-                          <td>${commitDate}</td>
-                          <td>${email}</td>
-                          <td>${linkedin}</td>
-                      </tr>
-                  `;
-              });
+            data.forEach((item, index) => {
+                // Check if this entry has been exported
+                const entryId = generateEntryId(item);
+                const isExported = isEntryExported(entryId);
+                const exportedClass = isExported ? 'exported-entry' : '';
+                
+                // Format contact information
+                const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                
+                // Format commit date
+                const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
+                
+                // Format owner info
+                const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
+                
+                tableHTML += `
+                    <tr class="${exportedClass}">
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="export-checkbox" data-index="${index}" checked style="width: auto;">
+                        </td>
+                        <td><span class="marker-badge">${item.marker}</span></td>
+                        <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
+                        <td><code>${item.file_path}</code></td>
+                        <td>${ownerInfo}</td>
+                        <td>⭐ ${item.stars || 0}</td>
+                        <td>${commitDate}</td>
+                        <td>${email}</td>
+                        <td>${item.description || 'N/A'}</td>
+                    </tr>
+                `;
+            });
 
             tableHTML += `
                             </tbody>
@@ -1160,25 +1588,115 @@
             `;
 
             queryResult.innerHTML = tableHTML;
+            
+            // Add event listeners for checkboxes
+            setupCheckboxHandlers();
         }
 
-        // Export data
-        function exportData() {
-            const queryResult = document.getElementById('queryResult');
-            const table = queryResult.querySelector('table');
+        // Setup checkbox handlers for select all functionality
+        function setupCheckboxHandlers() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const exportCheckboxes = document.querySelectorAll('.export-checkbox');
             
-            if (!table) {
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function() {
+                    exportCheckboxes.forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                    });
+                });
+            }
+            
+            // Update select all checkbox when individual checkboxes change
+            exportCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const allChecked = Array.from(exportCheckboxes).every(cb => cb.checked);
+                    const anyChecked = Array.from(exportCheckboxes).some(cb => cb.checked);
+                    
+                    if (selectAllCheckbox) {
+                        selectAllCheckbox.checked = allChecked;
+                        selectAllCheckbox.indeterminate = anyChecked && !allChecked;
+                    }
+                });
+            });
+        }
+
+
+
+        // Export data
+        function exportData(exportType = 'all') {
+            const queryResult = document.getElementById('queryResult');
+            const tableRows = queryResult.querySelectorAll('.data-table tbody tr');
+            
+            if (tableRows.length === 0) {
                 showAlert('No data to export. Please run a query first.', 'info');
                 return;
             }
 
-            // Convert table to CSV
-            const rows = Array.from(table.querySelectorAll('tr'));
-            const csv = rows.map(row => 
-                Array.from(row.querySelectorAll('td, th'))
-                    .map(cell => `"${cell.textContent.replace(/"/g, '""')}"`)
-                    .join(',')
-            ).join('\n');
+            // Get only checked rows
+            let checkedRows = [];
+            tableRows.forEach(row => {
+                const checkbox = row.querySelector('.export-checkbox');
+                if (checkbox && checkbox.checked) {
+                    checkedRows.push(row);
+                }
+            });
+
+            if (checkedRows.length === 0) {
+                showAlert('No items selected for export. Please check at least one item.', 'info');
+                return;
+            }
+
+            // If exporting "new only", filter out already exported entries
+            if (exportType === 'new') {
+                checkedRows = checkedRows.filter(row => {
+                    const cells = row.querySelectorAll('td');
+                    const marker = cells[1]?.querySelector('.marker-badge')?.textContent || '';
+                    const repoName = cells[2]?.querySelector('.repo-link')?.textContent || '';
+                    const filePath = cells[3]?.querySelector('code')?.textContent || '';
+                    const entryId = `${marker}-${repoName}-${filePath}`;
+                    return !isEntryExported(entryId);
+                });
+
+                if (checkedRows.length === 0) {
+                    showAlert('No new items to export. All selected items have already been exported.', 'info');
+                    return;
+                }
+            }
+
+            // Convert checked table rows to CSV
+            const csvRows = ['Marker,Repository,Owner,Stars,Latest Commit,Email,Description'];
+            
+            checkedRows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const marker = cells[1]?.querySelector('.marker-badge')?.textContent || 'N/A';
+                const repoLink = cells[2]?.querySelector('.repo-link');
+                const repoName = repoLink?.textContent || 'N/A';
+                const filePath = cells[3]?.querySelector('code')?.textContent || 'N/A';
+                const owner = cells[4]?.textContent || 'N/A';
+                const stars = cells[5]?.textContent.replace('⭐ ', '') || 'N/A';
+                const commitDate = cells[6]?.textContent || 'N/A';
+                const emailElement = cells[7]?.querySelector('.email-link');
+                const email = emailElement?.textContent || 'N/A';
+                const description = cells[8]?.textContent || 'N/A';
+                
+                // Mark this entry as exported
+                const entryId = `${marker}-${repoName}-${filePath}`;
+                addExportedEntry(entryId);
+                
+                const rowData = [
+                    marker,
+                    repoName,
+                    owner,
+                    stars,
+                    commitDate,
+                    email,
+                    description
+                ].map(field => `"${field.replace(/"/g, '""')}"`).join(',');
+                
+                csvRows.push(rowData);
+            });
+
+            const csv = csvRows.join('\n');
 
             // Download CSV
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -1189,7 +1707,12 @@
             a.click();
             window.URL.revokeObjectURL(url);
 
-            showAlert('Data exported successfully!', 'success');
+            // Update the visual state of exported entries
+            checkedRows.forEach(row => {
+                row.classList.add('exported-entry');
+            });
+
+            showAlert(`Data exported successfully! (${checkedRows.length} items)`, 'success');
         }
 
         // Show alert
@@ -1248,11 +1771,7 @@
                              <p style="font-size: 1.5rem; font-weight: 600; color: hsl(var(--success));">${stats.records_with_email}</p>
                              <small style="color: hsl(var(--muted-foreground));">${stats.email_percentage}%</small>
                          </div>
-                         <div style="background: hsl(var(--card-secondary)); padding: 1rem; border-radius: 0.5rem; border: 1px solid hsl(var(--border));">
-                             <h5 style="margin-bottom: 0.5rem; color: hsl(var(--muted-foreground));">With LinkedIn</h5>
-                             <p style="font-size: 1.5rem; font-weight: 600; color: hsl(var(--primary));">${stats.records_with_linkedin}</p>
-                             <small style="color: hsl(var(--muted-foreground));">${stats.linkedin_percentage}%</small>
-                         </div>
+
                          <div style="background: hsl(var(--card-secondary)); padding: 1rem; border-radius: 0.5rem; border: 1px solid hsl(var(--border));">
                              <h5 style="margin-bottom: 0.5rem; color: hsl(var(--muted-foreground));">Any Contact Info</h5>
                              <p style="font-size: 1.5rem; font-weight: 600; color: hsl(var(--success));">${stats.records_with_any_contact}</p>

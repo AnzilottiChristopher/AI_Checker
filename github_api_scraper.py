@@ -63,7 +63,6 @@ class MarkerHit(Base):
     owner_login = Column(String, index=True)
     # Contact information fields
     owner_email = Column(String)
-    owner_linkedin = Column(String)
     contact_source = Column(String)  # 'github_profile', 'repo_content', or 'none'
     contact_extracted_at = Column(DateTime, default=datetime.utcnow)
     # Repository activity fields
@@ -382,11 +381,15 @@ class GitHubAPIScraper:
             '.aicode',
         ]
         
-        # Get existing records from database for duplicate checking
+        # Use a single session for the entire operation to ensure consistency
         session = SessionLocal()
+        
+        # Get existing records from database for duplicate checking
         existing_records = session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).all()
         existing_set = {(record[0], record[1], record[2]) for record in existing_records}
-        session.close()
+        
+        # Track new records added in this run to prevent duplicates within the same run
+        new_records_in_this_run = set()
         
         total_new_records = 0
         for marker in ai_markers:
@@ -409,9 +412,10 @@ class GitHubAPIScraper:
                         
                     try:
                         repo = file.repository
-                        # Check if this result already exists
+                        # Check if this result already exists in database OR in this run
                         result_key = (marker, repo.full_name, file.path)
-                        if result_key in existing_set:
+                        if result_key in existing_set or result_key in new_records_in_this_run:
+                            logger.debug(f"Skipping duplicate: {marker} - {repo.full_name}/{file.path}")
                             continue  # Skip this result
                         
                         # Extract contact information for the repository owner (optional)
@@ -424,12 +428,11 @@ class GitHubAPIScraper:
                                 if repo_contacts['source'] != 'none':
                                     owner_contacts = repo_contacts
                         else:
-                            owner_contacts = {'email': None, 'linkedin_url': None, 'source': 'none'}
+                            owner_contacts = {'email': None, 'source': 'none'}
                         
                         # Get latest commit date for the repository
                         latest_commit_date = self.get_latest_commit_date(repo.full_name)
                         
-                        session = SessionLocal()
                         new_hit = MarkerHit(
                             marker=marker,
                             repo_name=repo.full_name,
@@ -441,14 +444,17 @@ class GitHubAPIScraper:
                             owner_type=repo.owner.type,
                             owner_login=repo.owner.login,
                             owner_email=owner_contacts['email'],
-                            owner_linkedin=owner_contacts['linkedin_url'],
                             contact_source=owner_contacts['source'],
                             contact_extracted_at=datetime.utcnow(),
                             latest_commit_date=latest_commit_date
                         )
                         session.add(new_hit)
                         session.commit()
-                        session.close()
+                        
+                        # Add to tracking sets to prevent duplicates
+                        new_records_in_this_run.add(result_key)
+                        existing_set.add(result_key)  # Update existing set for this run
+                        
                         total_new_records += 1
                         processed_count += 1
                         logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path} (contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
@@ -460,17 +466,19 @@ class GitHubAPIScraper:
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
         
-        return {"total_new_records": total_new_records, "status": "completed"}
+        session.close()
+        logger.info(f"Total new records added: {total_new_records}")
+        return {"total_new_records": total_new_records}
 
     def extract_contact_info(self, username: str) -> Dict[str, Optional[str]]:
         """
-        Extract email and LinkedIn information from a GitHub user's profile.
+        Extract email information from a GitHub user's profile.
         
         Args:
             username: GitHub username
             
         Returns:
-            Dictionary with email, linkedin_url, and source information
+            Dictionary with email and source information
         """
         try:
             self.check_rate_limit()
@@ -478,7 +486,6 @@ class GitHubAPIScraper:
             
             contacts = {
                 'email': None,
-                'linkedin_url': None,
                 'source': 'none'
             }
             
@@ -487,26 +494,11 @@ class GitHubAPIScraper:
                 contacts['email'] = user.email
                 contacts['source'] = 'github_profile'
             
-            # Check website for LinkedIn
-            if user.blog:
-                if 'linkedin.com' in user.blog:
-                    contacts['linkedin_url'] = user.blog
-                    if contacts['source'] == 'none':
-                        contacts['source'] = 'github_profile'
-            
-            # Check bio for LinkedIn
-            if user.bio:
-                linkedin_match = re.search(r'linkedin\.com/in/[\w-]+', user.bio)
-                if linkedin_match:
-                    contacts['linkedin_url'] = f"https://{linkedin_match.group()}"
-                    if contacts['source'] == 'none':
-                        contacts['source'] = 'github_profile'
-            
             return contacts
             
         except Exception as e:
             logger.warning(f"Error extracting contact info for {username}: {e}")
-            return {'email': None, 'linkedin_url': None, 'source': 'none'}
+            return {'email': None, 'source': 'none'}
 
     def get_latest_commit_date(self, repo_name: str) -> Optional[datetime]:
         """
@@ -540,7 +532,7 @@ class GitHubAPIScraper:
             repo_name: Repository name (owner/repo)
             
         Returns:
-            Dictionary with email, linkedin_url, and source information
+            Dictionary with email and source information
         """
         try:
             owner, repo = repo_name.split('/', 1)
@@ -557,32 +549,20 @@ class GitHubAPIScraper:
                     # Extract emails
                     emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', content)
                     
-                    # Extract LinkedIn URLs
-                    linkedin_patterns = [
-                        r'linkedin\.com/in/[\w-]+',
-                        r'https?://[^\s]*linkedin\.com/in/[\w-]+'
-                    ]
-                    
-                    linkedin_urls = []
-                    for pattern in linkedin_patterns:
-                        matches = re.findall(pattern, content)
-                        linkedin_urls.extend(matches)
-                    
-                    if emails or linkedin_urls:
+                    if emails:
                         return {
-                            'email': emails[0] if emails else None,
-                            'linkedin_url': linkedin_urls[0] if linkedin_urls else None,
+                            'email': emails[0],
                             'source': 'repo_content'
                         }
                         
                 except Exception as e:
                     continue  # File doesn't exist or other error
             
-            return {'email': None, 'linkedin_url': None, 'source': 'none'}
+            return {'email': None, 'source': 'none'}
             
         except Exception as e:
             logger.warning(f"Error extracting contacts from repo {repo_name}: {e}")
-            return {'email': None, 'linkedin_url': None, 'source': 'none'}
+            return {'email': None, 'source': 'none'}
 
 class APICodeParser:
     """
