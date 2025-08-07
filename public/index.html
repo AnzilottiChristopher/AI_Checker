@@ -1144,7 +1144,7 @@
                 const response = await fetch(`${API_BASE}/health`);
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.status === 'ok') {
+                    if (data.status === 'healthy' || data.status === 'ok') {
                         serverOnline = true;
                         statusBadge.className = 'status-badge online';
                         statusText.textContent = 'Online';
