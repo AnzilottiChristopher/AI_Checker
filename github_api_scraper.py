@@ -34,8 +34,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ai_code_generator.db")
 
 # Configure engine based on database type
 if DATABASE_URL.startswith("postgresql"):
-    # PostgreSQL configuration
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
+    # PostgreSQL configuration with psycopg dialect
+    engine = create_engine(DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"), pool_pre_ping=True, pool_recycle=300)
 else:
     # SQLite configuration (for local development)
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
