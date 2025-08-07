@@ -45,7 +45,7 @@ temp_*.json
 *.corrupted.*
 
 
-logs_results.json
+logs_result.json
 
 
 # IDE and editor files
