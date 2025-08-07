@@ -1492,7 +1492,7 @@
          async function getTopRepos() {
              const selectedMarkers = Array.from(document.querySelectorAll('#markerDropdown input[type="checkbox"]:checked:not(#selectAllMarkers)')).map(cb => cb.value);
              const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
-             const limitFilter = document.getElementById('limitFilter').value || '10';
+             const limitFilter = document.getElementById('limitFilter').value;
              const queryResult = document.getElementById('queryResult');
 
              if (!serverOnline) {
@@ -1502,7 +1502,7 @@
 
              try {
                  const params = new URLSearchParams();
-                 params.append('limit', limitFilter);
+                 if (limitFilter) params.append('limit', limitFilter);
                  if (selectedMarkers.length > 0) {
                      selectedMarkers.forEach(marker => params.append('marker', marker));
                  }

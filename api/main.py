@@ -237,7 +237,7 @@ async def get_contact_stats(db: Session = Depends(get_db)):
 
 @app.get("/api/hits")
 async def get_hits(
-    limit: Optional[str] = Query("10"),
+    limit: Optional[str] = Query(None),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("id"),
     sort_order: str = Query("desc"),
@@ -301,14 +301,16 @@ async def get_hits(
         query = query.offset(offset)
         
         # Handle limit - if empty string or None, don't limit (show all)
+        # If limit is provided and valid, apply it; otherwise show all results
         if limit and limit.strip() and limit != "":
             try:
                 limit_int = int(limit)
                 if limit_int > 0:
                     query = query.limit(limit_int)
             except ValueError:
-                # If limit is not a valid integer, don't apply limit
+                # If limit is not a valid integer, don't apply limit (show all)
                 pass
+        # If no limit provided, show all results (no limit applied)
         
         # Execute query
         hits = query.all()
@@ -345,7 +347,7 @@ async def get_hits(
 
 @app.get("/api/top-repos")
 async def get_top_repos(
-    limit: Optional[str] = Query("10"),
+    limit: Optional[str] = Query(None),
     filter_marker: Optional[str] = Query(None),
     marker: Optional[str] = Query(None),  # Frontend sends 'marker'
     filter_owner_type: Optional[str] = Query(None),
@@ -368,14 +370,16 @@ async def get_top_repos(
         query = query.order_by(MarkerHit.stars.desc())
         
         # Apply limit - if empty string or None, don't limit (show all)
+        # If limit is provided and valid, apply it; otherwise show all results
         if limit and limit.strip() and limit != "":
             try:
                 limit_int = int(limit)
                 if limit_int > 0:
                     query = query.limit(limit_int)
             except ValueError:
-                # If limit is not a valid integer, don't apply limit
+                # If limit is not a valid integer, don't apply limit (show all)
                 pass
+        # If no limit provided, show all results (no limit applied)
         
         # Execute query
         hits = query.all()
