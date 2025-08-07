@@ -9,3 +9,5 @@ services:
         sync: false
       - key: GITHUB_TOKEN
         sync: false
+    plan: free
+    pythonVersion: "3.11"
