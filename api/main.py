@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 import psycopg
 import sys
+import logging
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -52,11 +53,29 @@ def get_db():
     try:
         # Configure engine based on database type
         if database_url.startswith("postgresql"):
-            # PostgreSQL configuration with psycopg dialect
-            engine = create_engine(database_url.replace("postgresql://", "postgresql+psycopg://"), pool_pre_ping=True, pool_recycle=300)
+            # For Supabase, use connection pooling if available
+            # Replace the host with the pooled connection if it's a Supabase URL
+            if "supabase.co" in database_url:
+                # Use connection pooling for Supabase
+                pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
+                engine = create_engine(
+                    pooled_url.replace("postgresql://", "postgresql+psycopg://"), 
+                    pool_pre_ping=True, 
+                    pool_recycle=300,
+                    pool_size=5,
+                    max_overflow=10
+                )
+            else:
+                # Regular PostgreSQL configuration with psycopg dialect
+                engine = create_engine(
+                    database_url.replace("postgresql://", "postgresql+psycopg://"), 
+                    pool_pre_ping=True, 
+                    pool_recycle=300
+                )
         else:
             # SQLite configuration (for local development)
             engine = create_engine(database_url, connect_args={"check_same_thread": False})
+        
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         db = SessionLocal()
         try:
@@ -64,6 +83,7 @@ def get_db():
         finally:
             db.close()
     except Exception as e:
+        logging.error(f"Database connection error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
 
 @app.get("/api/health")
@@ -85,8 +105,24 @@ async def health_check():
         # Test database connection without querying tables (to avoid RLS issues)
         try:
             if database_url.startswith("postgresql"):
-                # PostgreSQL configuration with psycopg dialect
-                engine = create_engine(database_url.replace("postgresql://", "postgresql+psycopg://"), pool_pre_ping=True, pool_recycle=300)
+                # For Supabase, use connection pooling if available
+                if "supabase.co" in database_url:
+                    # Use connection pooling for Supabase
+                    pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
+                    engine = create_engine(
+                        pooled_url.replace("postgresql://", "postgresql+psycopg://"), 
+                        pool_pre_ping=True, 
+                        pool_recycle=300,
+                        pool_size=5,
+                        max_overflow=10
+                    )
+                else:
+                    # Regular PostgreSQL configuration with psycopg dialect
+                    engine = create_engine(
+                        database_url.replace("postgresql://", "postgresql+psycopg://"), 
+                        pool_pre_ping=True, 
+                        pool_recycle=300
+                    )
             else:
                 # SQLite configuration (for local development)
                 engine = create_engine(database_url, connect_args={"check_same_thread": False})
