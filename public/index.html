@@ -1383,8 +1383,9 @@
                 const markersResponse = await fetch(`${API_BASE}/markers`);
                 console.log('Markers response status:', markersResponse.status);
                 if (markersResponse.ok) {
-                    const markers = await markersResponse.json();
-                    console.log('Markers received:', markers);
+                    const markersData = await markersResponse.json();
+                    console.log('Markers received:', markersData);
+                    const markers = markersData.markers || [];
                     const markerDropdown = document.getElementById('markerDropdown');
                     const dropdownContent = markerDropdown.querySelector('.dropdown-content');
                     
@@ -1423,7 +1424,8 @@
                 // Load owner types
                 const ownerTypesResponse = await fetch(`${API_BASE}/owner_types`);
                 if (ownerTypesResponse.ok) {
-                    const ownerTypes = await ownerTypesResponse.json();
+                    const ownerTypesData = await ownerTypesResponse.json();
+                    const ownerTypes = ownerTypesData.owner_types || [];
                     const ownerTypeSelect = document.getElementById('ownerTypeFilter');
                     ownerTypeSelect.innerHTML = '<option value="">👥 Filter by Owner Type</option>';
                     ownerTypes.forEach(type => {
