@@ -74,7 +74,11 @@ class handler(BaseHTTPRequestHandler):
                 response = {
                     "status": "error",
                     "message": "DATABASE_URL not found in environment",
-                    "database": "unavailable"
+                    "database": "unavailable",
+                    "debug_info": {
+                        "database_url_exists": False,
+                        "all_env_vars": list(os.environ.keys())
+                    }
                 }
                 self.send_json_response(response, 500)
                 return
@@ -100,6 +104,9 @@ class handler(BaseHTTPRequestHandler):
                 self.send_json_response(response, 200)
                 
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
+            
             response = {
                 "status": "error",
                 "message": f"Database error: {str(e)}",
@@ -107,7 +114,9 @@ class handler(BaseHTTPRequestHandler):
                 "debug_info": {
                     "database_url_exists": bool(os.getenv('DATABASE_URL')),
                     "database_url_length": len(os.getenv('DATABASE_URL', '')),
-                    "database_url_start": os.getenv('DATABASE_URL', '')[:20] + '...' if os.getenv('DATABASE_URL') else 'None'
+                    "database_url_start": os.getenv('DATABASE_URL', '')[:20] + '...' if os.getenv('DATABASE_URL') else 'None',
+                    "error_type": type(e).__name__,
+                    "error_traceback": error_traceback
                 }
             }
             self.send_json_response(response, 500)
