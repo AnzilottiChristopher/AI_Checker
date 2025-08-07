@@ -143,14 +143,13 @@ async def get_contact_stats(db: Session = Depends(get_db)):
         
         # Get records with email
         records_with_email = db.query(MarkerHit).filter(
-            MarkerHit.email.isnot(None),
-            MarkerHit.email != ""
+            MarkerHit.owner_email.isnot(None),
+            MarkerHit.owner_email != ""
         ).count()
         
         # Get records with any contact info
         records_with_contact = db.query(MarkerHit).filter(
-            (MarkerHit.email.isnot(None) & (MarkerHit.email != "")) |
-            (MarkerHit.phone.isnot(None) & (MarkerHit.phone != ""))
+            MarkerHit.owner_email.isnot(None) & (MarkerHit.owner_email != "")
         ).count()
         
         # Calculate percentages
