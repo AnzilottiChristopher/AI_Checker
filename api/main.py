@@ -237,11 +237,12 @@ async def get_contact_stats(db: Session = Depends(get_db)):
 
 @app.get("/api/hits")
 async def get_hits(
-    limit: int = Query(10, ge=1, le=100),
+    limit: Optional[str] = Query("10"),
     offset: int = Query(0, ge=0),
     sort_by: str = Query("id"),
     sort_order: str = Query("desc"),
     filter_marker: Optional[str] = Query(None),
+    marker: Optional[str] = Query(None),  # Frontend sends 'marker'
     filter_owner_type: Optional[str] = Query(None),
     filter_owner_login: Optional[str] = Query(None),
     has_email: Optional[bool] = Query(None),
@@ -253,8 +254,10 @@ async def get_hits(
         query = db.query(MarkerHit)
         
         # Apply filters
-        if filter_marker:
-            query = query.filter(MarkerHit.marker.contains(filter_marker))
+        # Handle marker filter (frontend sends 'marker', backend expects 'filter_marker')
+        marker_filter = filter_marker or marker
+        if marker_filter:
+            query = query.filter(MarkerHit.marker.contains(marker_filter))
         if filter_owner_type:
             query = query.filter(MarkerHit.owner_type == filter_owner_type)
         if filter_owner_login:
@@ -265,16 +268,47 @@ async def get_hits(
             else:
                 query = query.filter((MarkerHit.owner_email.is_(None)) | (MarkerHit.owner_email == ""))
         
-        # Apply sorting
-        if hasattr(MarkerHit, sort_by):
-            sort_column = getattr(MarkerHit, sort_by)
-            if sort_order.upper() == "DESC":
-                query = query.order_by(sort_column.desc())
+        # Apply sorting - handle frontend's combined sort parameters
+        if sort_by:
+            # Map frontend sort parameters to database columns
+            sort_mapping = {
+                "stars_desc": ("stars", "desc"),
+                "stars_asc": ("stars", "asc"),
+                "commit_desc": ("latest_commit_date", "desc"),
+                "commit_asc": ("latest_commit_date", "asc"),
+                "name_desc": ("repo_name", "desc"),
+                "name_asc": ("repo_name", "asc"),
+                "id": ("id", "desc")
+            }
+            
+            if sort_by in sort_mapping:
+                column_name, order = sort_mapping[sort_by]
+                sort_column = getattr(MarkerHit, column_name)
+                if order.upper() == "DESC":
+                    query = query.order_by(sort_column.desc())
+                else:
+                    query = query.order_by(sort_column.asc())
             else:
-                query = query.order_by(sort_column.asc())
+                # Fallback to direct column sorting
+                if hasattr(MarkerHit, sort_by):
+                    sort_column = getattr(MarkerHit, sort_by)
+                    if sort_order.upper() == "DESC":
+                        query = query.order_by(sort_column.desc())
+                    else:
+                        query = query.order_by(sort_column.asc())
         
         # Apply pagination
-        query = query.offset(offset).limit(limit)
+        query = query.offset(offset)
+        
+        # Handle limit - if empty string or None, don't limit (show all)
+        if limit and limit.strip() and limit != "":
+            try:
+                limit_int = int(limit)
+                if limit_int > 0:
+                    query = query.limit(limit_int)
+            except ValueError:
+                # If limit is not a valid integer, don't apply limit
+                pass
         
         # Execute query
         hits = query.all()
@@ -302,8 +336,74 @@ async def get_hits(
         return {
             "hits": result,
             "total": len(result),
-            "limit": limit,
+            "limit": limit if limit and limit.strip() else "all",
             "offset": offset
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/top-repos")
+async def get_top_repos(
+    limit: Optional[str] = Query("10"),
+    filter_marker: Optional[str] = Query(None),
+    marker: Optional[str] = Query(None),  # Frontend sends 'marker'
+    filter_owner_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get top repositories by stars"""
+    try:
+        # Start with base query
+        query = db.query(MarkerHit)
+        
+        # Apply filters
+        # Handle marker filter (frontend sends 'marker', backend expects 'filter_marker')
+        marker_filter = filter_marker or marker
+        if marker_filter:
+            query = query.filter(MarkerHit.marker.contains(marker_filter))
+        if filter_owner_type:
+            query = query.filter(MarkerHit.owner_type == filter_owner_type)
+        
+        # Sort by stars descending (top repositories)
+        query = query.order_by(MarkerHit.stars.desc())
+        
+        # Apply limit - if empty string or None, don't limit (show all)
+        if limit and limit.strip() and limit != "":
+            try:
+                limit_int = int(limit)
+                if limit_int > 0:
+                    query = query.limit(limit_int)
+            except ValueError:
+                # If limit is not a valid integer, don't apply limit
+                pass
+        
+        # Execute query
+        hits = query.all()
+        
+        # Convert to list of dictionaries
+        result = []
+        for hit in hits:
+            result.append({
+                "id": hit.id,
+                "marker": hit.marker,
+                "owner_type": hit.owner_type,
+                "owner_login": hit.owner_login,
+                "repo_name": hit.repo_name,
+                "repo_url": hit.repo_url,
+                "file_path": hit.file_path,
+                "file_url": hit.file_url,
+                "stars": hit.stars,
+                "description": hit.description or "",
+                "owner_email": hit.owner_email,
+                "contact_source": hit.contact_source,
+                "contact_extracted_at": str(hit.contact_extracted_at) if hit.contact_extracted_at else "",
+                "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else ""
+            })
+        
+        return {
+            "hits": result,
+            "total": len(result),
+            "limit": limit if limit and limit.strip() else "all"
         }
         
     except Exception as e:
