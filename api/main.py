@@ -194,9 +194,9 @@ async def get_hits(
             query = query.filter(MarkerHit.owner_login.contains(filter_owner_login))
         if has_email is not None:
             if has_email:
-                query = query.filter(MarkerHit.email.isnot(None), MarkerHit.email != "")
+                query = query.filter(MarkerHit.owner_email.isnot(None), MarkerHit.owner_email != "")
             else:
-                query = query.filter((MarkerHit.email.is_(None)) | (MarkerHit.email == ""))
+                query = query.filter((MarkerHit.owner_email.is_(None)) | (MarkerHit.owner_email == ""))
         
         # Apply sorting
         if hasattr(MarkerHit, sort_by):
@@ -225,10 +225,8 @@ async def get_hits(
                 "file_path": hit.file_path,
                 "file_url": hit.file_url,
                 "stars": hit.stars,
-                "forks": hit.forks,
                 "description": hit.description or "",
-                "email": hit.email,
-                "phone": hit.phone,
+                "owner_email": hit.owner_email,
                 "contact_source": hit.contact_source,
                 "contact_extracted_at": str(hit.contact_extracted_at) if hit.contact_extracted_at else "",
                 "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else ""
