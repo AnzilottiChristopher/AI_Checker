@@ -471,7 +471,7 @@ async def run_scraper(request: dict):
         raise HTTPException(status_code=500, detail=f"Scraper error: {str(e)}")
 
 @app.post("/api/update-commit-dates")
-async def update_commit_dates(request: dict):
+async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
     """Update missing commit dates for existing records"""
     try:
         github_token = request.get('github_token')
@@ -486,7 +486,6 @@ async def update_commit_dates(request: dict):
         scraper = GitHubAPIScraper(github_token)
         
         # Get records with missing commit dates
-        db = SessionLocal()
         records_without_dates = db.query(MarkerHit).filter(
             (MarkerHit.latest_commit_date.is_(None)) | 
             (MarkerHit.latest_commit_date == "")
@@ -520,7 +519,6 @@ async def update_commit_dates(request: dict):
         
         # Final commit
         db.commit()
-        db.close()
         
         return {
             "status": "success",
