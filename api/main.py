@@ -53,14 +53,30 @@ def get_db():
     try:
         # Configure engine based on database type
         if database_url.startswith("postgresql"):
-            # For now, use direct connection instead of pooling to test connectivity
-            engine = create_engine(
-                database_url.replace("postgresql://", "postgresql+psycopg://"), 
-                pool_pre_ping=True, 
-                pool_recycle=300,
-                pool_size=5,
-                max_overflow=10
-            )
+            # For Supabase, try connection pooling if available
+            if "supabase.co" in database_url:
+                # Use connection pooling for Supabase - replace the port with 6543
+                if ":5432" in database_url:
+                    pooled_url = database_url.replace(":5432", ":6543")
+                else:
+                    # If no port specified, add the pooled port
+                    pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
+                engine = create_engine(
+                    pooled_url.replace("postgresql://", "postgresql+psycopg://"), 
+                    pool_pre_ping=True, 
+                    pool_recycle=300,
+                    pool_size=5,
+                    max_overflow=10
+                )
+            else:
+                # Regular PostgreSQL configuration with psycopg dialect
+                engine = create_engine(
+                    database_url.replace("postgresql://", "postgresql+psycopg://"), 
+                    pool_pre_ping=True, 
+                    pool_recycle=300,
+                    pool_size=5,
+                    max_overflow=10
+                )
         else:
             # SQLite configuration (for local development)
             engine = create_engine(database_url, connect_args={"check_same_thread": False})
@@ -94,14 +110,30 @@ async def health_check():
         # Test database connection without querying tables (to avoid RLS issues)
         try:
             if database_url.startswith("postgresql"):
-                # For now, use direct connection instead of pooling to test connectivity
-                engine = create_engine(
-                    database_url.replace("postgresql://", "postgresql+psycopg://"), 
-                    pool_pre_ping=True, 
-                    pool_recycle=300,
-                    pool_size=5,
-                    max_overflow=10
-                )
+                # For Supabase, try connection pooling if available
+                if "supabase.co" in database_url:
+                    # Use connection pooling for Supabase - replace the port with 6543
+                    if ":5432" in database_url:
+                        pooled_url = database_url.replace(":5432", ":6543")
+                    else:
+                        # If no port specified, add the pooled port
+                        pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
+                    engine = create_engine(
+                        pooled_url.replace("postgresql://", "postgresql+psycopg://"), 
+                        pool_pre_ping=True, 
+                        pool_recycle=300,
+                        pool_size=5,
+                        max_overflow=10
+                    )
+                else:
+                    # Regular PostgreSQL configuration with psycopg dialect
+                    engine = create_engine(
+                        database_url.replace("postgresql://", "postgresql+psycopg://"), 
+                        pool_pre_ping=True, 
+                        pool_recycle=300,
+                        pool_size=5,
+                        max_overflow=10
+                    )
             else:
                 # SQLite configuration (for local development)
                 engine = create_engine(database_url, connect_args={"check_same_thread": False})
