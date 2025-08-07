@@ -244,6 +244,7 @@ async def get_hits(
     filter_marker: Optional[str] = Query(None),
     marker: Optional[str] = Query(None),  # Frontend sends 'marker'
     filter_owner_type: Optional[str] = Query(None),
+    owner_type: Optional[str] = Query(None),  # Frontend sends 'owner_type'
     filter_owner_login: Optional[str] = Query(None),
     has_email: Optional[bool] = Query(None),
     db: Session = Depends(get_db)
@@ -258,8 +259,10 @@ async def get_hits(
         marker_filter = filter_marker or marker
         if marker_filter:
             query = query.filter(MarkerHit.marker.contains(marker_filter))
-        if filter_owner_type:
-            query = query.filter(MarkerHit.owner_type == filter_owner_type)
+        # Handle owner_type filter (frontend sends 'owner_type', backend expects 'filter_owner_type')
+        owner_type_filter = filter_owner_type or owner_type
+        if owner_type_filter:
+            query = query.filter(MarkerHit.owner_type == owner_type_filter)
         if filter_owner_login:
             query = query.filter(MarkerHit.owner_login.contains(filter_owner_login))
         if has_email is not None:
@@ -351,6 +354,7 @@ async def get_top_repos(
     filter_marker: Optional[str] = Query(None),
     marker: Optional[str] = Query(None),  # Frontend sends 'marker'
     filter_owner_type: Optional[str] = Query(None),
+    owner_type: Optional[str] = Query(None),  # Frontend sends 'owner_type'
     db: Session = Depends(get_db)
 ):
     """Get top repositories by stars"""
@@ -363,8 +367,10 @@ async def get_top_repos(
         marker_filter = filter_marker or marker
         if marker_filter:
             query = query.filter(MarkerHit.marker.contains(marker_filter))
-        if filter_owner_type:
-            query = query.filter(MarkerHit.owner_type == filter_owner_type)
+        # Handle owner_type filter (frontend sends 'owner_type', backend expects 'filter_owner_type')
+        owner_type_filter = filter_owner_type or owner_type
+        if owner_type_filter:
+            query = query.filter(MarkerHit.owner_type == owner_type_filter)
         
         # Sort by stars descending (top repositories)
         query = query.order_by(MarkerHit.stars.desc())
