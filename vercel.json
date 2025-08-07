@@ -1,27 +1,18 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "backend.py",
-      "use": "@vercel/python"
+  "functions": {
+    "backend.py": {
+      "runtime": "python3.9",
+      "maxDuration": 30
     }
-  ],
+  },
   "routes": [
     {
-      "src": "/",
-      "dest": "backend.py"
-    },
-    {
       "src": "/(.*)",
-      "dest": "backend.py"
+      "dest": "/backend.py"
     }
   ],
   "env": {
     "PYTHONPATH": "."
-  },
-  "functions": {
-    "backend.py": {
-      "maxDuration": 30
-    }
   }
 } 
