@@ -1470,12 +1470,12 @@
                      const data = await response.json();
                      
                      // Debug: Log the first few results to verify sorting
-                     console.log('Query results (first 5):', data.slice(0, 5).map(item => ({
+                     console.log('Query results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
                          repo: item.repo_name,
                          stars: item.stars
-                     })));
+                     })) : 'No hits data');
                      
-                     displayResults(data);
+                     displayResults(data.hits || []);
                  } else {
                      const error = await response.json();
                      showAlert(`Query failed: ${error.detail}`, 'error');
@@ -1513,12 +1513,12 @@
                      const data = await response.json();
                      
                      // Debug: Log the first few results to verify sorting
-                     console.log('Top repos results (first 5):', data.slice(0, 5).map(item => ({
+                     console.log('Top repos results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
                          repo: item.repo_name,
                          stars: item.stars
-                     })));
+                     })) : 'No hits data');
                      
-                     displayResults(data, 'Top Repositories by Stars');
+                     displayResults(data.hits || [], 'Top Repositories by Stars');
                  } else {
                      const error = await response.json();
                      showAlert(`Failed to get top repos: ${error.detail}`, 'error');
