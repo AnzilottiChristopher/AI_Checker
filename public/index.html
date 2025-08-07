@@ -1459,7 +1459,7 @@
              try {
                  const params = new URLSearchParams();
                  if (selectedMarkers.length > 0) {
-                     selectedMarkers.forEach(marker => params.append('marker', marker));
+                     params.append('marker', selectedMarkers.join(','));
                  }
                  if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
                  if (hasEmailFilter) params.append('has_email', hasEmailFilter);
@@ -1506,7 +1506,7 @@
                  const params = new URLSearchParams();
                  if (limitFilter) params.append('limit', limitFilter);
                  if (selectedMarkers.length > 0) {
-                     selectedMarkers.forEach(marker => params.append('marker', marker));
+                     params.append('marker', selectedMarkers.join(','));
                  }
                  if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
 

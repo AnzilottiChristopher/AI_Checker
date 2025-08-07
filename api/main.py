@@ -268,7 +268,13 @@ async def get_hits(
         # Handle marker filter (frontend sends 'marker', backend expects 'filter_marker')
         marker_filter = filter_marker or marker
         if marker_filter:
-            query = query.filter(MarkerHit.marker.contains(marker_filter))
+            # Split by comma to handle multiple markers
+            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
+            if markers:
+                # Create OR condition for multiple markers
+                from sqlalchemy import or_
+                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
+                query = query.filter(or_(*marker_conditions))
         # Handle owner_type filter (frontend sends 'owner_type', backend expects 'filter_owner_type')
         owner_type_filter = filter_owner_type or owner_type
         if owner_type_filter:
@@ -376,7 +382,13 @@ async def get_top_repos(
         # Handle marker filter (frontend sends 'marker', backend expects 'filter_marker')
         marker_filter = filter_marker or marker
         if marker_filter:
-            query = query.filter(MarkerHit.marker.contains(marker_filter))
+            # Split by comma to handle multiple markers
+            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
+            if markers:
+                # Create OR condition for multiple markers
+                from sqlalchemy import or_
+                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
+                query = query.filter(or_(*marker_conditions))
         # Handle owner_type filter (frontend sends 'owner_type', backend expects 'filter_owner_type')
         owner_type_filter = filter_owner_type or owner_type
         if owner_type_filter:
