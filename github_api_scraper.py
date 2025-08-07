@@ -1,36 +1,26 @@
 #!/usr/bin/env python3
 """
-GitHub API-Only Code Quality Scraper
-Analyzes repositories through GitHub API without cloning to local filesystem.
-
-This script provides classes and functions to search for repositories, fetch code files, analyze code quality and security, and export results, all using the GitHub API.
-
-Main usage is via the GitHubAPICodeAnalyzer class. See api_usage_examples.py for example usage.
+GitHub API Scraper for AI Code Generator Markers
 """
-
 import os
+import sys
 import json
-import csv
-import ast
-import re
-import math
-import logging
-import base64
 import time
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, asdict
-from collections import defaultdict, Counter
-from datetime import datetime
-
 import requests
+from datetime import datetime, timezone
+from typing import List, Dict, Optional, Any
+from dataclasses import dataclass, asdict
+from urllib.parse import urljoin, urlparse
+import sqlalchemy
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import psycopg2
 from github import Github
-from github.GithubException import RateLimitExceededException, UnknownObjectException
-import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, nullslast
-from sqlalchemy.orm import sessionmaker, declarative_base
+import re
 
 # Configure logging for the module
+import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -236,8 +226,6 @@ class GitHubAPIScraper:
                     logger.warning(f"Error processing content {content.path}: {e}")
                     continue
         
-        except UnknownObjectException:
-            logger.warning(f"Path not found: {path}")
         except Exception as e:
             logger.error(f"Error getting repository contents: {e}")
         
@@ -281,7 +269,7 @@ class GitHubAPIScraper:
             '.fs', '.pas', '.ada', '.cob', '.for', '.f90', '.jl', '.nim'
         }
         
-        return Path(filename).suffix.lower() in code_extensions
+        return re.match(r'\.(py|js|jsx|ts|tsx|java|cpp|cc|cxx|hpp|h|c|cs|go|rs|php|rb|swift|kt|scala|m|mm|pl|r|sql|sh|bash|ps1|vbs|lua|dart|elm|clj|hs|ml|fs|pas|ada|cob|for|f90|jl|nim)$', filename, re.IGNORECASE) is not None
 
     def search_ai_code_generator_files(self, max_repos_per_pattern: int = 10, min_stars: int = 0, existing_data: dict = None) -> dict:
         """
@@ -507,14 +495,6 @@ class GitHubAPIScraper:
             except Exception as e:
                 logger.error(f"Error committing final batch: {e}")
                 session.rollback()
-                # Try individual commits as fallback
-                for record in records_to_commit:
-                    try:
-                        session.add(record)
-                        session.commit()
-                    except Exception as individual_error:
-                        logger.error(f"Failed to commit individual record: {individual_error}")
-                        session.rollback()
         
         session.close()
         logger.info(f"Total new records added: {total_new_records}")
@@ -788,7 +768,7 @@ class APICodeParser:
     
     def get_language_from_extension(self, file_path: str) -> Optional[str]:
         """Determine programming language from file extension."""
-        ext = Path(file_path).suffix.lower()
+        ext = re.sub(r'\.\w+$', '', file_path).lower() # Remove .extension
         for lang, extensions in self.LANGUAGE_EXTENSIONS.items():
             if ext in extensions:
                 return lang
@@ -1096,7 +1076,7 @@ class APIDataAggregator:
                 'analysis_type': 'github_api_scraping',
                 'total_repos': len(self.repo_analyses),
                 'total_files': len(self.file_analyses),
-                'timestamp': str(pd.Timestamp.now())
+                'timestamp': str(datetime.now())
             },
             'file_analyses': [asdict(f) for f in self.file_analyses],
             'repo_analyses': [asdict(r) for r in self.repo_analyses]
@@ -1111,12 +1091,26 @@ class APIDataAggregator:
         """
         Export file analyses to a CSV file (spreadsheet format).
         """
+        import csv
         output_file = self.output_dir / filename
         
         if self.file_analyses:
-            df = pd.DataFrame([asdict(f) for f in self.file_analyses])
-            df['suspicious_patterns'] = df['suspicious_patterns'].apply(lambda x: ', '.join(x))
-            df.to_csv(output_file, index=False)
+            # Convert dataclass objects to dictionaries
+            data = [asdict(f) for f in self.file_analyses]
+            
+            # Write to CSV
+            with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+                if data:
+                    fieldnames = data[0].keys()
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+                    
+                    for row in data:
+                        # Convert suspicious_patterns list to string
+                        if 'suspicious_patterns' in row and isinstance(row['suspicious_patterns'], list):
+                            row['suspicious_patterns'] = ', '.join(row['suspicious_patterns'])
+                        writer.writerow(row)
+            
             logger.info(f"CSV results exported to {output_file}")
     
     def generate_summary_report(self, filename: str = "api_analysis_summary.txt"):
