@@ -14,6 +14,11 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, nullsla
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import Base and MarkerHit from scraper to ensure consistency
 from github_api_scraper import Base, MarkerHit
@@ -71,20 +76,45 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="AI Code Generator Marker Backend")
 
+# Global exception handler to sanitize error messages
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "detail": "An unexpected error occurred"}
+    )
+
 # Add CORS middleware to allow frontend requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend URL
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "http://localhost:8000",  # Local development
+        "http://127.0.0.1:3000",  # Local development
+        "http://127.0.0.1:8000",  # Local development
+        "https://*.vercel.app",    # Vercel deployments
+        "https://*.netlify.app",   # Netlify deployments (if you use it)
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# TODO: For production deployment, replace with your specific frontend URL:
+# allow_origins=["https://your-frontend-domain.vercel.app"]
 
 # Dependency to get DB session
 def get_db():
     db = SessionLocal()
     try:
+        # Test the connection
+        db.execute("SELECT 1")
         yield db
+    except Exception as e:
+        logger.error(f"Database connection error: {str(e)}")
+        db.close()
+        raise HTTPException(status_code=500, detail="Database connection failed")
     finally:
         db.close()
 
@@ -96,7 +126,6 @@ def list_hits(
     owner_type: Optional[str] = None, 
     owner_login: Optional[str] = None,
     has_email: Optional[str] = None,
-
     contact_source: Optional[str] = None,
     sort_by: Optional[str] = None,
     limit: Optional[int] = None
@@ -109,11 +138,20 @@ def list_hits(
     - owner_type: Filter by owner type ('User' or 'Organization')
     - owner_login: Filter by specific owner username
     - has_email: Filter by whether email is available ('true' or 'false')
-
     - contact_source: Filter by contact source ('github_profile', 'repo_content', 'none')
     - sort_by: Sort order ('stars_desc', 'stars_asc', 'name_asc', 'name_desc')
     - limit: Maximum number of results to return
     """
+    # Input validation
+    if limit is not None and (limit < 1 or limit > 1000):
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+    
+    if sort_by and sort_by not in ['stars_desc', 'stars_asc', 'name_asc', 'name_desc', 'commit_desc', 'commit_asc']:
+        raise HTTPException(status_code=400, detail="Invalid sort_by parameter")
+    
+    if has_email and has_email.lower() not in ['true', 'false']:
+        raise HTTPException(status_code=400, detail="has_email must be 'true' or 'false'")
+    
     # Debug: Print received parameters
     print(f"DEBUG: Received marker parameter: {marker} (type: {type(marker)})")
     
