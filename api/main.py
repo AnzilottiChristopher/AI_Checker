@@ -304,10 +304,39 @@ async def get_hits(
             if sort_by in sort_mapping:
                 column_name, order = sort_mapping[sort_by]
                 sort_column = getattr(MarkerHit, column_name)
-                if order.upper() == "DESC":
-                    query = query.order_by(sort_column.desc())
+                
+                # Special handling for commit date sorting to put "N/A" values at the bottom
+                if column_name == "latest_commit_date":
+                    if order.upper() == "DESC":
+                        # For descending: put N/A, empty, and NULL values at the bottom
+                        from sqlalchemy import case, desc, asc
+                        query = query.order_by(
+                            case(
+                                (MarkerHit.latest_commit_date.is_(None), 0),
+                                (MarkerHit.latest_commit_date == "", 0),
+                                (MarkerHit.latest_commit_date == "N/A", 0),
+                                else_=1
+                            ).desc(),
+                            MarkerHit.latest_commit_date.desc()
+                        )
+                    else:
+                        # For ascending: put N/A, empty, and NULL values at the bottom
+                        from sqlalchemy import case, desc, asc
+                        query = query.order_by(
+                            case(
+                                (MarkerHit.latest_commit_date.is_(None), 0),
+                                (MarkerHit.latest_commit_date == "", 0),
+                                (MarkerHit.latest_commit_date == "N/A", 0),
+                                else_=1
+                            ).desc(),
+                            MarkerHit.latest_commit_date.asc()
+                        )
                 else:
-                    query = query.order_by(sort_column.asc())
+                    # Regular sorting for other columns
+                    if order.upper() == "DESC":
+                        query = query.order_by(sort_column.desc())
+                    else:
+                        query = query.order_by(sort_column.asc())
             else:
                 # Fallback to direct column sorting
                 if hasattr(MarkerHit, sort_by):
@@ -485,10 +514,11 @@ async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
         # Create scraper instance
         scraper = GitHubAPIScraper(github_token)
         
-        # Get records with missing commit dates
+        # Get records with missing commit dates (including "N/A" values)
         records_without_dates = db.query(MarkerHit).filter(
             (MarkerHit.latest_commit_date.is_(None)) | 
-            (MarkerHit.latest_commit_date == "")
+            (MarkerHit.latest_commit_date == "") |
+            (MarkerHit.latest_commit_date == "N/A")
         ).all()
         
         updated_count = 0
