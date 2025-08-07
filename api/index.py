@@ -74,17 +74,10 @@ class handler(BaseHTTPRequestHandler):
                 response = {
                     "status": "error",
                     "message": "DATABASE_URL not found in environment",
-                    "database": "unavailable",
-                    "debug_info": {
-                        "database_url_exists": False,
-                        "all_env_vars": list(os.environ.keys())
-                    }
+                    "database": "unavailable"
                 }
                 self.send_json_response(response, 500)
                 return
-            
-            # Debug: Show what URL we're trying to connect to (masked)
-            masked_url = database_url.replace(database_url.split('@')[0].split('://')[1], '***:***') if '@' in database_url else 'Unknown'
             
             # Create engine
             engine = create_engine(database_url, pool_pre_ping=True, pool_recycle=300)
@@ -98,26 +91,15 @@ class handler(BaseHTTPRequestHandler):
                     "status": "healthy",
                     "message": f"Database connection successful. Found {count} records.",
                     "database": "connected",
-                    "record_count": count,
-                    "connection_info": f"Connected to: {masked_url}"
+                    "record_count": count
                 }
                 self.send_json_response(response, 200)
                 
         except Exception as e:
-            import traceback
-            error_traceback = traceback.format_exc()
-            
             response = {
                 "status": "error",
                 "message": f"Database error: {str(e)}",
-                "database": "unavailable",
-                "debug_info": {
-                    "database_url_exists": bool(os.getenv('DATABASE_URL')),
-                    "database_url_length": len(os.getenv('DATABASE_URL', '')),
-                    "database_url_start": os.getenv('DATABASE_URL', '')[:20] + '...' if os.getenv('DATABASE_URL') else 'None',
-                    "error_type": type(e).__name__,
-                    "error_traceback": error_traceback
-                }
+                "database": "unavailable"
             }
             self.send_json_response(response, 500)
     
