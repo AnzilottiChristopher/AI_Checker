@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import psycopg
 import sys
 import logging
+import time
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -468,6 +469,69 @@ async def run_scraper(request: dict):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scraper error: {str(e)}")
+
+@app.post("/api/update-commit-dates")
+async def update_commit_dates(request: dict):
+    """Update missing commit dates for existing records"""
+    try:
+        github_token = request.get('github_token')
+        
+        if not github_token:
+            raise HTTPException(status_code=400, detail="GitHub token is required")
+        
+        # Initialize database
+        init_database()
+        
+        # Create scraper instance
+        scraper = GitHubAPIScraper(github_token)
+        
+        # Get records with missing commit dates
+        db = SessionLocal()
+        records_without_dates = db.query(MarkerHit).filter(
+            (MarkerHit.latest_commit_date.is_(None)) | 
+            (MarkerHit.latest_commit_date == "")
+        ).all()
+        
+        updated_count = 0
+        error_count = 0
+        
+        for record in records_without_dates:
+            try:
+                # Get latest commit date
+                latest_commit_date = scraper.get_latest_commit_date(record.repo_name)
+                
+                if latest_commit_date:
+                    # Update the record
+                    record.latest_commit_date = latest_commit_date.isoformat()
+                    updated_count += 1
+                    
+                    # Commit every 10 records to avoid long transactions
+                    if updated_count % 10 == 0:
+                        db.commit()
+                        logging.info(f"Updated {updated_count} commit dates so far...")
+                
+                # Add delay to respect rate limits
+                time.sleep(0.1)  # 100ms delay between requests
+                
+            except Exception as e:
+                error_count += 1
+                logging.warning(f"Error updating commit date for {record.repo_name}: {e}")
+                continue
+        
+        # Final commit
+        db.commit()
+        db.close()
+        
+        return {
+            "status": "success",
+            "message": f"Updated {updated_count} commit dates. {error_count} errors encountered.",
+            "updated_count": updated_count,
+            "error_count": error_count,
+            "total_records_processed": len(records_without_dates)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Update error: {str(e)}")
 
 @app.get("/")
 async def root():

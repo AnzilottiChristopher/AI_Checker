@@ -948,8 +948,8 @@
                             <button class="btn btn-primary" onclick="runScraper()" id="scraperBtn">
                                 🔍 Run Scraper
                             </button>
-                            <button class="btn btn-outline" onclick="clearData()" id="clearBtn">
-                                🗑️ Clear Data
+                            <button class="btn btn-outline" onclick="updateCommitDates()" id="updateCommitBtn">
+                                📅 Update Commit Dates
                             </button>
                         </div>
                         
@@ -1298,23 +1298,88 @@
             scraperBtn.innerHTML = '🔍 Run Scraper';
         }
 
-        // Clear data
-        async function clearData() {
-            if (!confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
+        // Update commit dates
+        async function updateCommitDates() {
+            const updateCommitBtn = document.getElementById('updateCommitBtn');
+            const importResult = document.getElementById('importResult');
+            
+            // Get GitHub token
+            const githubToken = prompt('Enter your GitHub token (required for API access):');
+            if (!githubToken) {
+                showAlert('❌ GitHub token is required to update commit dates', 'error');
                 return;
             }
-
-            if (!serverOnline) {
-                showAlert('Server is offline. Please start the backend server.', 'error');
-                return;
-            }
+            
+            // Disable button and show progress
+            updateCommitBtn.disabled = true;
+            updateCommitBtn.innerHTML = '⏳ Updating...';
+            
+            // Show progress bar
+            const progressContainer = document.getElementById('scraperProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progressContainer.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Updating commit dates...';
+            
+            // Simulate progress
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90;
+                progressFill.style.width = progress + '%';
+                progressText.textContent = `Updating commit dates... ${Math.round(progress)}%`;
+            }, 1000);
 
             try {
-                // This would need a clear endpoint in your backend
-                showAlert('Clear functionality not implemented in backend yet.', 'info');
+                const requestBody = {
+                    github_token: githubToken
+                };
+
+                const response = await fetch(`${API_BASE}/update-commit-dates`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                // Complete progress bar
+                clearInterval(progressInterval);
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Update completed!';
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showAlert(`✅ ${data.message}`, 'success');
+                    
+                    // Show detailed results
+                    const resultHtml = `
+                        <div class="alert alert-success" style="margin-top: 1rem;">
+                            <h4>Commit Date Update Results:</h4>
+                            <p><strong>Records updated:</strong> ${data.updated_count}</p>
+                            <p><strong>Errors encountered:</strong> ${data.error_count}</p>
+                            <p><strong>Total records processed:</strong> ${data.total_records_processed}</p>
+                        </div>
+                    `;
+                    importResult.innerHTML = resultHtml;
+                } else {
+                    const error = await response.json();
+                    showAlert(`❌ Update failed: ${error.detail}`, 'error');
+                }
             } catch (error) {
-                showAlert(`Clear failed: ${error.message}`, 'error');
+                clearInterval(progressInterval);
+                showAlert(`❌ Update failed: ${error.message}`, 'error');
             }
+
+            // Hide progress bar after a delay
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 2000);
+
+            updateCommitBtn.disabled = false;
+            updateCommitBtn.innerHTML = '📅 Update Commit Dates';
         }
 
         // Marker dropdown functions
