@@ -34,28 +34,14 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./ai_code_generator.db")
 
 # Configure engine based on database type
 if DATABASE_URL.startswith("postgresql"):
-    # For Supabase, use connection pooling if available
-    if "supabase.co" in DATABASE_URL:
-        # Use connection pooling for Supabase - replace the port with 6543
-        if ":5432" in DATABASE_URL:
-            pooled_url = DATABASE_URL.replace(":5432", ":6543")
-        else:
-            # If no port specified, add the pooled port
-            pooled_url = DATABASE_URL.replace("supabase.co", "supabase.co:6543")
-        engine = create_engine(
-            pooled_url.replace("postgresql://", "postgresql+psycopg://"), 
-            pool_pre_ping=True, 
-            pool_recycle=300,
-            pool_size=5,
-            max_overflow=10
-        )
-    else:
-        # Regular PostgreSQL configuration with psycopg dialect
-        engine = create_engine(
-            DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"), 
-            pool_pre_ping=True, 
-            pool_recycle=300
-        )
+    # For now, use direct connection instead of pooling to test connectivity
+    engine = create_engine(
+        DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"), 
+        pool_pre_ping=True, 
+        pool_recycle=300,
+        pool_size=5,
+        max_overflow=10
+    )
 else:
     # SQLite configuration (for local development)
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
