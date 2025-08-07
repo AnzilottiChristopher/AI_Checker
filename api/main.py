@@ -54,10 +54,13 @@ def get_db():
         # Configure engine based on database type
         if database_url.startswith("postgresql"):
             # For Supabase, use connection pooling if available
-            # Replace the host with the pooled connection if it's a Supabase URL
             if "supabase.co" in database_url:
-                # Use connection pooling for Supabase
-                pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
+                # Use connection pooling for Supabase - replace the port with 6543
+                if ":5432" in database_url:
+                    pooled_url = database_url.replace(":5432", ":6543")
+                else:
+                    # If no port specified, add the pooled port
+                    pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
                 engine = create_engine(
                     pooled_url.replace("postgresql://", "postgresql+psycopg://"), 
                     pool_pre_ping=True, 
@@ -107,8 +110,12 @@ async def health_check():
             if database_url.startswith("postgresql"):
                 # For Supabase, use connection pooling if available
                 if "supabase.co" in database_url:
-                    # Use connection pooling for Supabase
-                    pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
+                    # Use connection pooling for Supabase - replace the port with 6543
+                    if ":5432" in database_url:
+                        pooled_url = database_url.replace(":5432", ":6543")
+                    else:
+                        # If no port specified, add the pooled port
+                        pooled_url = database_url.replace("supabase.co", "supabase.co:6543")
                     engine = create_engine(
                         pooled_url.replace("postgresql://", "postgresql+psycopg://"), 
                         pool_pre_ping=True, 
