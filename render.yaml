@@ -11,3 +11,8 @@ services:
         sync: false
     plan: free
     pythonVersion: "3.11"
+    buildFilter:
+      paths:
+        - requirements.txt
+        - api/**
+        - github_api_scraper.py
