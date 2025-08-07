@@ -49,7 +49,13 @@ def get_db():
         raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
     
     try:
-        engine = create_engine(database_url, pool_pre_ping=True, pool_recycle=300)
+        # Configure engine based on database type
+        if database_url.startswith("postgresql"):
+            # PostgreSQL configuration with psycopg dialect
+            engine = create_engine(database_url.replace("postgresql://", "postgresql+psycopg://"), pool_pre_ping=True, pool_recycle=300)
+        else:
+            # SQLite configuration (for local development)
+            engine = create_engine(database_url, connect_args={"check_same_thread": False})
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         db = SessionLocal()
         try:
@@ -80,7 +86,13 @@ async def health_check():
             )
         
         # Test database connection
-        engine = create_engine(database_url, pool_pre_ping=True, pool_recycle=300)
+        # Configure engine based on database type
+        if database_url.startswith("postgresql"):
+            # PostgreSQL configuration with psycopg dialect
+            engine = create_engine(database_url.replace("postgresql://", "postgresql+psycopg://"), pool_pre_ping=True, pool_recycle=300)
+        else:
+            # SQLite configuration (for local development)
+            engine = create_engine(database_url, connect_args={"check_same_thread": False})
         with engine.connect() as conn:
             result = conn.execute(text("SELECT COUNT(*) FROM marker_hits"))
             count = result.scalar()
