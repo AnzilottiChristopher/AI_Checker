@@ -848,6 +848,13 @@
                 align-items: flex-start;
                 gap: 0.5rem;
             }
+            
+            .header-content > div:last-child {
+                margin-left: 0;
+                margin-top: 0.5rem;
+                width: 100%;
+                justify-content: space-between;
+            }
         }
     </style>
 </head>
@@ -864,6 +871,16 @@
                     <h1>AI Code Generator Marker Backend</h1>
                     <p>Modern interface for managing and querying AI code markers</p>
                 </div>
+                <div style="margin-left: auto; display: flex; align-items: center; gap: 1rem;">
+                    <div class="status-badge" id="serverStatusBadge">
+                        <div class="status-dot"></div>
+                        <span id="serverStatusText">Checking...</span>
+                    </div>
+                    <button class="btn btn-outline" onclick="checkServerStatus()" id="checkStatusBtn">
+                        <span id="checkStatusIcon">🔄</span>
+                        <span id="checkStatusBtnText">Check Status</span>
+                    </button>
+                </div>
             </div>
         </div>
     </header>
@@ -872,38 +889,27 @@
     <main class="main-content">
         <div class="container">
             <div class="content-grid">
-                <!-- Server Status -->
+                <!-- Project Description -->
                 <div class="card" style="animation-delay: 0s;">
                     <div class="card-header">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div>
-                                <h3 class="card-title">
-                                    🔌 Server Management
-                                </h3>
-                                <p class="card-description">Monitor and control your backend server</p>
-                            </div>
-                            <div class="status-badge" id="serverStatusBadge">
-                                <div class="status-dot"></div>
-                                <span id="serverStatusText">Checking...</span>
-                            </div>
-                        </div>
+                        <h3 class="card-title">
+                            📊 Project Overview
+                        </h3>
+                        <p class="card-description">AI Code Generator Marker Tracker</p>
                     </div>
                     <div class="card-content">
-                        <div style="background: hsl(var(--card-secondary)); border-radius: 0.5rem; padding: 1rem; border: 1px solid hsl(var(--border)); margin-bottom: 1.5rem;">
+                        <div style="background: hsl(var(--card-secondary)); border-radius: 0.5rem; padding: 1rem; border: 1px solid hsl(var(--border));">
                             <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-                                <div style="color: hsl(var(--muted-foreground)); margin-top: 0.125rem;">💻</div>
+                                <div style="color: hsl(var(--muted-foreground)); margin-top: 0.125rem;">📊</div>
                                 <div>
-                                    <p style="font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">Start the server with this command:</p>
-                                    <div class="code-block">uvicorn backend:app --reload</div>
+                                    <p style="font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">AI Code Generator Marker Tracker</p>
+                                    <p style="font-size: 0.75rem; color: hsl(var(--muted-foreground)); line-height: 1.4;">
+                                        Discover and track AI code generation tools across GitHub repositories. 
+                                        This tool scans repositories for AI markers like .claude, .cursor, .copilot, 
+                                        and other AI-assisted coding patterns to help identify trending AI tools.
+                                    </p>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div style="display: flex; gap: 0.75rem;">
-                            <button class="btn btn-outline" onclick="checkServerStatus()" id="checkStatusBtn">
-                                <span id="checkStatusIcon">🔄</span>
-                                <span id="checkStatusText">Check Status</span>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -1125,7 +1131,7 @@
             const statusText = document.getElementById('serverStatusText');
             const checkBtn = document.getElementById('checkStatusBtn');
             const checkIcon = document.getElementById('checkStatusIcon');
-            const checkText = document.getElementById('checkStatusText');
+            const checkText = document.getElementById('checkStatusBtnText');
 
             // Show loading state
             checkBtn.disabled = true;

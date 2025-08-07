@@ -8,11 +8,20 @@
   ],
   "routes": [
     {
+      "src": "/",
+      "dest": "backend.py"
+    },
+    {
       "src": "/(.*)",
       "dest": "backend.py"
     }
   ],
   "env": {
     "PYTHONPATH": "."
+  },
+  "functions": {
+    "backend.py": {
+      "maxDuration": 30
+    }
   }
 } 
