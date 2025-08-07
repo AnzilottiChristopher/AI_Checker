@@ -1108,7 +1108,7 @@
 
         // Generate unique entry ID
         function generateEntryId(item) {
-            return `${item.marker}-${item.repo_name}-${item.file_path}`;
+            return `${item.marker}-${item.repo_name}`;
         }
 
         // Initialize the app
@@ -1537,7 +1537,6 @@
                                     <th style="width: 40px;">✓</th>
                                     <th>Marker</th>
                                     <th>Repository</th>
-                                    <th>File Path</th>
                                     <th>Owner</th>
                                     <th>Stars</th>
                                     <th>Latest Commit</th>
@@ -1570,7 +1569,6 @@
                         </td>
                         <td><span class="marker-badge">${item.marker}</span></td>
                         <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
-                        <td><code>${item.file_path}</code></td>
                         <td>${ownerInfo}</td>
                         <td>⭐ ${item.stars || 0}</td>
                         <td>${commitDate}</td>
@@ -1652,8 +1650,7 @@
                     const cells = row.querySelectorAll('td');
                     const marker = cells[1]?.querySelector('.marker-badge')?.textContent || '';
                     const repoName = cells[2]?.querySelector('.repo-link')?.textContent || '';
-                    const filePath = cells[3]?.querySelector('code')?.textContent || '';
-                    const entryId = `${marker}-${repoName}-${filePath}`;
+                    const entryId = `${marker}-${repoName}`;
                     return !isEntryExported(entryId);
                 });
 
@@ -1671,16 +1668,15 @@
                 const marker = cells[1]?.querySelector('.marker-badge')?.textContent || 'N/A';
                 const repoLink = cells[2]?.querySelector('.repo-link');
                 const repoName = repoLink?.textContent || 'N/A';
-                const filePath = cells[3]?.querySelector('code')?.textContent || 'N/A';
-                const owner = cells[4]?.textContent || 'N/A';
-                const stars = cells[5]?.textContent.replace('⭐ ', '') || 'N/A';
-                const commitDate = cells[6]?.textContent || 'N/A';
-                const emailElement = cells[7]?.querySelector('.email-link');
+                const owner = cells[3]?.textContent || 'N/A';
+                const stars = cells[4]?.textContent.replace('⭐ ', '') || 'N/A';
+                const commitDate = cells[5]?.textContent || 'N/A';
+                const emailElement = cells[6]?.querySelector('.email-link');
                 const email = emailElement?.textContent || 'N/A';
-                const description = cells[8]?.textContent || 'N/A';
+                const description = cells[7]?.textContent || 'N/A';
                 
                 // Mark this entry as exported
-                const entryId = `${marker}-${repoName}-${filePath}`;
+                const entryId = `${marker}-${repoName}`;
                 addExportedEntry(entryId);
                 
                 const rowData = [

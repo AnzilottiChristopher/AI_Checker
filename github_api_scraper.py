@@ -64,9 +64,9 @@ class MarkerHit(Base):
     # Contact information fields
     owner_email = Column(String)
     contact_source = Column(String)  # 'github_profile', 'repo_content', or 'none'
-    contact_extracted_at = Column(DateTime, default=datetime.utcnow)
+    contact_extracted_at = Column(String, default=lambda: datetime.utcnow().isoformat())
     # Repository activity fields
-    latest_commit_date = Column(DateTime)
+    latest_commit_date = Column(String)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -392,6 +392,8 @@ class GitHubAPIScraper:
         new_records_in_this_run = set()
         
         total_new_records = 0
+        records_to_commit = []  # Batch records for better performance and reliability
+        
         for marker in ai_markers:
             # Build the search query for the file path
             query = f'path:{marker}'
@@ -445,11 +447,12 @@ class GitHubAPIScraper:
                             owner_login=repo.owner.login,
                             owner_email=owner_contacts['email'],
                             contact_source=owner_contacts['source'],
-                            contact_extracted_at=datetime.utcnow(),
-                            latest_commit_date=latest_commit_date
+                            contact_extracted_at=datetime.utcnow().isoformat(),
+                            latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None
                         )
-                        session.add(new_hit)
-                        session.commit()
+                        
+                        # Add to batch instead of immediate commit
+                        records_to_commit.append(new_hit)
                         
                         # Add to tracking sets to prevent duplicates
                         new_records_in_this_run.add(result_key)
@@ -457,6 +460,27 @@ class GitHubAPIScraper:
                         
                         total_new_records += 1
                         processed_count += 1
+                        
+                        # Commit in batches of 10 to prevent session issues
+                        if len(records_to_commit) >= 10:
+                            try:
+                                session.add_all(records_to_commit)
+                                session.commit()
+                                logger.info(f"Committed batch of {len(records_to_commit)} records")
+                                records_to_commit = []  # Clear the batch
+                            except Exception as e:
+                                logger.error(f"Error committing batch: {e}")
+                                session.rollback()
+                                # Try individual commits as fallback
+                                for record in records_to_commit:
+                                    try:
+                                        session.add(record)
+                                        session.commit()
+                                    except Exception as individual_error:
+                                        logger.error(f"Failed to commit individual record: {individual_error}")
+                                        session.rollback()
+                                records_to_commit = []
+                        
                         logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path} (contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
                     except Exception as e:
                         logger.warning(f"Error processing file hit for {marker}: {e}")
@@ -465,6 +489,24 @@ class GitHubAPIScraper:
                 logger.info(f"Processed {processed_count} hits for marker {marker}")
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
+        
+        # Commit any remaining records
+        if records_to_commit:
+            try:
+                session.add_all(records_to_commit)
+                session.commit()
+                logger.info(f"Committed final batch of {len(records_to_commit)} records")
+            except Exception as e:
+                logger.error(f"Error committing final batch: {e}")
+                session.rollback()
+                # Try individual commits as fallback
+                for record in records_to_commit:
+                    try:
+                        session.add(record)
+                        session.commit()
+                    except Exception as individual_error:
+                        logger.error(f"Failed to commit individual record: {individual_error}")
+                        session.rollback()
         
         session.close()
         logger.info(f"Total new records added: {total_new_records}")
@@ -563,6 +605,131 @@ class GitHubAPIScraper:
         except Exception as e:
             logger.warning(f"Error extracting contacts from repo {repo_name}: {e}")
             return {'email': None, 'source': 'none'}
+
+    def check_database_integrity(self, database_type: str = "sqlite") -> dict:
+        """
+        Check database integrity and fix any issues like NULL IDs.
+        
+        Args:
+            database_type: Type of database ("sqlite" or "postgresql")
+            
+        Returns:
+            Dictionary with integrity check results
+        """
+        session = SessionLocal()
+        
+        try:
+            # Check for NULL IDs
+            null_id_count = session.query(MarkerHit).filter(MarkerHit.id.is_(None)).count()
+            
+            # Check for duplicate IDs
+            from sqlalchemy import func
+            duplicate_ids = session.query(MarkerHit.id, func.count(MarkerHit.id).label('count')).group_by(MarkerHit.id).having(func.count(MarkerHit.id) > 1).all()
+            
+            # Check for missing required fields
+            missing_description = session.query(MarkerHit).filter(MarkerHit.description.is_(None)).count()
+            
+            issues = []
+            fixes_applied = 0
+            
+            # Fix NULL IDs
+            if null_id_count > 0:
+                logger.warning(f"Found {null_id_count} records with NULL IDs")
+                issues.append(f"NULL IDs: {null_id_count}")
+                
+                # Get the next available ID
+                max_id = session.query(MarkerHit.id).order_by(MarkerHit.id.desc()).limit(1).scalar() or 0
+                
+                # Fix NULL IDs - use direct SQL update to avoid object issues
+                try:
+                    # Get all records with NULL IDs
+                    null_records = session.query(MarkerHit).filter(MarkerHit.id.is_(None)).all()
+                    
+                    # Update each record with a new ID
+                    for i, record in enumerate(null_records):
+                        if record is not None:  # Check if record is not None
+                            new_id = max_id + i + 1
+                            try:
+                                record.id = new_id
+                                fixes_applied += 1
+                            except Exception as e:
+                                logger.error(f"Error updating record {i}: {e}")
+                                continue
+                    
+                    session.commit()
+                    logger.info(f"Fixed {fixes_applied} NULL IDs")
+                    
+                    # For PostgreSQL, reset the sequence if needed
+                    if database_type == "postgresql" and fixes_applied > 0:
+                        try:
+                            # Reset the sequence to the new max ID
+                            new_max_id = max_id + fixes_applied
+                            session.execute(f"SELECT setval('marker_hits_id_seq', {new_max_id})")
+                            session.commit()
+                            logger.info(f"Reset PostgreSQL sequence to {new_max_id}")
+                        except Exception as e:
+                            logger.warning(f"Could not reset PostgreSQL sequence: {e}")
+                            
+                except Exception as e:
+                    logger.error(f"Error fixing NULL IDs: {e}")
+                    session.rollback()
+            
+            # Fix duplicate IDs
+            if duplicate_ids:
+                logger.warning(f"Found {len(duplicate_ids)} duplicate ID groups")
+                issues.append(f"Duplicate IDs: {len(duplicate_ids)} groups")
+                
+                try:
+                    for duplicate_id, count in duplicate_ids:
+                        if count > 1:
+                            # Get all records with this ID
+                            records = session.query(MarkerHit).filter(MarkerHit.id == duplicate_id).all()
+                            
+                            # Keep the first one, update the rest
+                            for i, record in enumerate(records[1:], 1):
+                                if record is not None:  # Check if record is not None
+                                    new_id = duplicate_id + i
+                                    try:
+                                        record.id = new_id
+                                        fixes_applied += 1
+                                    except Exception as e:
+                                        logger.error(f"Error updating duplicate record: {e}")
+                                        continue
+                    
+                    session.commit()
+                    logger.info(f"Fixed {fixes_applied} duplicate IDs")
+                except Exception as e:
+                    logger.error(f"Error fixing duplicate IDs: {e}")
+                    session.rollback()
+            
+            # Fix NULL descriptions
+            if missing_description > 0:
+                logger.warning(f"Found {missing_description} records with NULL descriptions")
+                issues.append(f"NULL descriptions: {missing_description}")
+                
+                try:
+                    session.query(MarkerHit).filter(MarkerHit.description.is_(None)).update({MarkerHit.description: ""})
+                    session.commit()
+                    logger.info(f"Fixed {missing_description} NULL descriptions")
+                except Exception as e:
+                    logger.error(f"Error fixing NULL descriptions: {e}")
+                    session.rollback()
+            
+            total_records = session.query(MarkerHit).count()
+            
+            return {
+                "total_records": total_records,
+                "issues_found": issues,
+                "fixes_applied": fixes_applied,
+                "integrity_ok": len(issues) == 0,
+                "database_type": database_type
+            }
+            
+        except Exception as e:
+            logger.error(f"Error during database integrity check: {e}")
+            return {"error": str(e), "database_type": database_type}
+        finally:
+            session.close()
 
 class APICodeParser:
     """

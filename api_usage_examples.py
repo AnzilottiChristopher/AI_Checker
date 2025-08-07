@@ -304,7 +304,26 @@ def ai_code_generator_marker_search():
     
     print(f"\nScraper completed!")
     print(f"New records added to database: {results['total_new_records']}")
-    print(f"Status: {results['status']}")
+    
+    # Run database integrity check
+    print("\n=== Database Integrity Check ===")
+    # For SQLite (default)
+    integrity_results = scraper.check_database_integrity()
+    
+    # For PostgreSQL, use:
+    # integrity_results = scraper.check_database_integrity(database_type="postgresql")
+    
+    if integrity_results.get('error'):
+        print(f"Error during integrity check: {integrity_results['error']}")
+    else:
+        print(f"Total records: {integrity_results['total_records']}")
+        print(f"Database type: {integrity_results.get('database_type', 'sqlite')}")
+        if integrity_results['issues_found']:
+            print(f"Issues found: {', '.join(integrity_results['issues_found'])}")
+            print(f"Fixes applied: {integrity_results['fixes_applied']}")
+        else:
+            print("Database integrity: OK")
+    
     print("\nData is now available in the SQLite database (ai_code_generator.db)")
     print("Use the backend API or frontend to query the data.")
 

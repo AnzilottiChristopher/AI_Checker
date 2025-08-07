@@ -11,9 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, nullslast
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
+
+# Import Base and MarkerHit from scraper to ensure consistency
+from github_api_scraper import Base, MarkerHit
 
 # Database setup - PostgreSQL
 # Use environment variable for DATABASE_URL, fallback to SQLite for local development
@@ -35,27 +38,9 @@ else:
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
 
-# SQLAlchemy model for a marker hit
-class MarkerHit(Base):
-    __tablename__ = "marker_hits"
-    id = Column(Integer, primary_key=True, index=True)
-    marker = Column(String, index=True)
-    repo_name = Column(String, index=True)
-    repo_url = Column(String)
-    file_path = Column(String)
-    file_url = Column(String)
-    stars = Column(Integer)
-    description = Column(String)
-    owner_type = Column(String, index=True)
-    owner_login = Column(String, index=True)
-    # Contact information fields
-    owner_email = Column(String)
-    contact_source = Column(String)  # 'github_profile', 'repo_content', or 'none'
-    contact_extracted_at = Column(DateTime, default=datetime.utcnow)
-    # Repository activity fields
-    latest_commit_date = Column(DateTime)
+# Use MarkerHit model from github_api_scraper
+# (Model definition removed to avoid conflicts)
 
 # Pydantic model for API responses
 class MarkerHitSchema(BaseModel):
@@ -71,8 +56,8 @@ class MarkerHitSchema(BaseModel):
     owner_login: str
     owner_email: Optional[str]
     contact_source: Optional[str]
-    contact_extracted_at: Optional[datetime]
-    latest_commit_date: Optional[datetime]
+    contact_extracted_at: Optional[str]  # Changed from datetime to str to match database
+    latest_commit_date: Optional[str]    # Changed from datetime to str to match database
 
     class Config:
         from_attributes = True
