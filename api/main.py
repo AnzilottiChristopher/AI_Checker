@@ -171,36 +171,46 @@ async def health_check():
         )
 
 @app.get("/api/markers")
-async def get_markers():
-    """Get available markers"""
-    return {
-        "markers": [
-            "ai-code-generator",
-            "ai-code-gen", 
-            "code-generator",
-            "ai-generator"
-        ]
-    }
+async def get_markers(db: Session = Depends(get_db)):
+    """Get available markers from database"""
+    try:
+        # Get distinct marker values from the database
+        markers = db.query(MarkerHit.marker).distinct().all()
+        # Extract the marker values from the query results
+        marker_list = [marker[0] for marker in markers if marker[0]]
+        return {
+            "markers": marker_list
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/owner_types")
-async def get_owner_types():
-    """Get available owner types"""
-    return {
-        "owner_types": [
-            "User",
-            "Organization"
-        ]
-    }
+async def get_owner_types(db: Session = Depends(get_db)):
+    """Get available owner types from database"""
+    try:
+        # Get distinct owner_type values from the database
+        owner_types = db.query(MarkerHit.owner_type).distinct().all()
+        # Extract the owner_type values from the query results
+        owner_type_list = [owner_type[0] for owner_type in owner_types if owner_type[0]]
+        return {
+            "owner_types": owner_type_list
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/owner_logins")
-async def get_owner_logins():
-    """Get available owner logins"""
-    return {
-        "owner_logins": [
-            "example-user",
-            "example-org"
-        ]
-    }
+async def get_owner_logins(db: Session = Depends(get_db)):
+    """Get available owner logins from database"""
+    try:
+        # Get distinct owner_login values from the database
+        owner_logins = db.query(MarkerHit.owner_login).distinct().all()
+        # Extract the owner_login values from the query results
+        owner_login_list = [owner_login[0] for owner_login in owner_logins if owner_login[0]]
+        return {
+            "owner_logins": owner_login_list
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/contact-stats")
 async def get_contact_stats(db: Session = Depends(get_db)):
