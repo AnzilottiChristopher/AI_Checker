@@ -1,14 +1,14 @@
 {
   "version": 2,
   "functions": {
-    "api/test_simple.py": {
+    "api/index.py": {
       "maxDuration": 30
     }
   },
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/test_simple.py"
+      "dest": "/api/index.py"
     },
     {
       "src": "/(.*)",

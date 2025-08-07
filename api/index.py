@@ -72,7 +72,11 @@ class ScraperRequest(BaseModel):
     extract_contacts: Optional[bool] = True
 
 # Initialize database on startup (but don't fail if it doesn't work)
-init_database()
+try:
+    init_database()
+except Exception as e:
+    logger.warning(f"Database initialization failed (this is OK for development): {str(e)}")
+    # Continue without database - the app will still work for basic endpoints
 
 app = FastAPI(title="AI Code Generator Marker Backend")
 
@@ -335,7 +339,7 @@ def get_contact_stats():
 @app.get("/health")
 def health_check():
     """Simple health check endpoint for the frontend to verify server status."""
-    return {"status": "ok", "message": "Server is running"}
+    return {"status": "ok", "message": "Server is running", "database": "available" if engine else "unavailable"}
 
 @app.post("/run-scraper")
 async def run_scraper(request: ScraperRequest):
