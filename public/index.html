@@ -1141,9 +1141,22 @@
             checkText.textContent = 'Checking...';
 
             try {
-                const response = await fetch(`${API_BASE}/health`);
+                console.log('Checking server status at:', `${API_BASE}/health`);
+                const response = await fetch(`${API_BASE}/health`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors'
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Response data:', data);
+                    
                     if (data.status === 'healthy' || data.status === 'ok') {
                         serverOnline = true;
                         statusBadge.className = 'status-badge online';
@@ -1154,16 +1167,27 @@
                         serverOnline = false;
                         statusBadge.className = 'status-badge offline';
                         statusText.textContent = 'Offline';
+                        console.log('Server returned unhealthy status:', data.status);
                     }
                 } else {
                     serverOnline = false;
                     statusBadge.className = 'status-badge offline';
                     statusText.textContent = 'Offline';
+                    console.log('Server returned error status:', response.status);
+                    
+                    // Try to get error details
+                    try {
+                        const errorData = await response.text();
+                        console.log('Error response:', errorData);
+                    } catch (e) {
+                        console.log('Could not read error response');
+                    }
                 }
             } catch (error) {
                 serverOnline = false;
                 statusBadge.className = 'status-badge offline';
                 statusText.textContent = 'Offline';
+                console.error('Network error checking server status:', error);
             }
 
             // Reset button state

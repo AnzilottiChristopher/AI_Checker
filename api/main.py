@@ -34,11 +34,12 @@ app.add_middleware(
         "https://ai-checker-3pgglrfai-chris-anzilottis-projects.vercel.app",
         "https://ai-checker-daxwyi63d-chris-anzilottis-projects.vercel.app",
         "https://*.vercel.app",
-        "https://*.netlify.app"
+        "https://*.netlify.app",
+        "*"  # Allow all origins for debugging - remove this in production
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "*"],
 )
 
 # Database setup
@@ -99,7 +100,8 @@ async def health_check():
                 "status": "healthy",
                 "message": "API is running successfully",
                 "database": "connected",
-                "timestamp": "2025-08-07T20:25:00Z"
+                "timestamp": "2025-08-07T20:25:00Z",
+                "cors_enabled": True
             }
         except Exception as db_error:
             return {
@@ -107,7 +109,8 @@ async def health_check():
                 "message": "API is running successfully",
                 "database": "connection_failed",
                 "database_error": str(db_error),
-                "timestamp": "2025-08-07T20:25:00Z"
+                "timestamp": "2025-08-07T20:25:00Z",
+                "cors_enabled": True
             }
                 
     except Exception as e:
@@ -291,3 +294,12 @@ async def run_scraper(request: dict):
 async def root():
     """Root endpoint"""
     return {"message": "AI Code Generator Marker API", "version": "1.0.0"}
+
+@app.get("/api/test")
+async def test_endpoint():
+    """Simple test endpoint for debugging CORS"""
+    return {
+        "status": "ok",
+        "message": "Test endpoint working",
+        "timestamp": "2025-08-07T20:25:00Z"
+    }
