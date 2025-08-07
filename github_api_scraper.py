@@ -7,17 +7,21 @@ import sys
 import json
 import time
 import requests
+import math
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from urllib.parse import urljoin, urlparse
+from pathlib import Path
+from collections import Counter
 import sqlalchemy
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import psycopg2
+import psycopg
 from github import Github
 import re
+import ast
 
 # Configure logging for the module
 import logging
@@ -611,7 +615,6 @@ class GitHubAPIScraper:
             null_id_count = session.query(MarkerHit).filter(MarkerHit.id.is_(None)).count()
             
             # Check for duplicate IDs
-            from sqlalchemy import func
             duplicate_ids = session.query(MarkerHit.id, func.count(MarkerHit.id).label('count')).group_by(MarkerHit.id).having(func.count(MarkerHit.id) > 1).all()
             
             # Check for missing required fields

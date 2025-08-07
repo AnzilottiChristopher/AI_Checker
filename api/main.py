@@ -11,7 +11,7 @@ from typing import Optional, List
 import sqlalchemy
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
-import psycopg2
+import psycopg
 import sys
 
 # Add parent directory to path for imports
