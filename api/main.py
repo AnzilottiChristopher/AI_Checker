@@ -318,3 +318,33 @@ async def test_endpoint():
         "message": "Test endpoint working",
         "timestamp": "2025-08-07T20:25:00Z"
     }
+
+@app.get("/api/debug-db")
+async def debug_database():
+    """Debug endpoint to check database configuration"""
+    database_url = os.getenv('DATABASE_URL')
+    
+    if not database_url:
+        return {
+            "error": "DATABASE_URL not set",
+            "database_url": None
+        }
+    
+    # Mask the password for security
+    if database_url.startswith("postgresql://"):
+        try:
+            # Parse the URL to mask the password
+            from urllib.parse import urlparse
+            parsed = urlparse(database_url)
+            masked_url = f"postgresql://{parsed.username}:***@{parsed.hostname}:{parsed.port}{parsed.path}"
+        except:
+            masked_url = "postgresql://***:***@***:***/***"
+    else:
+        masked_url = database_url
+    
+    return {
+        "database_url_masked": masked_url,
+        "database_type": "postgresql" if database_url.startswith("postgresql") else "sqlite",
+        "has_supabase": "supabase.co" in database_url if database_url else False,
+        "connection_test": "Try /api/health for connection test"
+    }
