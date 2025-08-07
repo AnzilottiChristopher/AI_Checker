@@ -67,38 +67,39 @@ class handler(BaseHTTPRequestHandler):
     def handle_health(self):
         """Handle health check with database connection test"""
         try:
-            # Get DATABASE_URL from environment
+            # First, check if DATABASE_URL exists
             database_url = os.getenv('DATABASE_URL')
             
             if not database_url:
                 response = {
                     "status": "error",
-                    "message": "DATABASE_URL not found in environment",
-                    "database": "unavailable"
+                    "message": "DATABASE_URL environment variable is not set",
+                    "database": "unavailable",
+                    "debug_info": {
+                        "database_url_exists": False,
+                        "available_env_vars": list(os.environ.keys())
+                    }
                 }
                 self.send_json_response(response, 500)
                 return
             
-            # Create engine
-            engine = create_engine(database_url, pool_pre_ping=True, pool_recycle=300)
-            
-            # Test connection
-            with engine.connect() as conn:
-                result = conn.execute(text("SELECT COUNT(*) FROM marker_hits"))
-                count = result.scalar()
-                
-                response = {
-                    "status": "healthy",
-                    "message": f"Database connection successful. Found {count} records.",
-                    "database": "connected",
-                    "record_count": count
+            # If we get here, DATABASE_URL exists
+            response = {
+                "status": "partial_success",
+                "message": "DATABASE_URL is set, but database connection not tested yet",
+                "database": "url_found",
+                "debug_info": {
+                    "database_url_exists": True,
+                    "database_url_length": len(database_url),
+                    "database_url_start": database_url[:20] + "..." if len(database_url) > 20 else database_url
                 }
-                self.send_json_response(response, 200)
+            }
+            self.send_json_response(response, 200)
                 
         except Exception as e:
             response = {
                 "status": "error",
-                "message": f"Database error: {str(e)}",
+                "message": f"Error checking environment: {str(e)}",
                 "database": "unavailable"
             }
             self.send_json_response(response, 500)
