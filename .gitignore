@@ -45,6 +45,8 @@ temp_*.json
 *.corrupted.*
 
 
+logs_results.json
+
 
 # IDE and editor files
 .vscode/

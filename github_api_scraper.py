@@ -68,8 +68,16 @@ class MarkerHit(Base):
     # Repository activity fields
     latest_commit_date = Column(String)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Database initialization function
+def init_database():
+    """Initialize database tables. Only call this when needed, not during import."""
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Error creating database tables: {e}")
+        # Don't raise the exception - let the application continue
+        pass
 
 @dataclass
 class FileAnalysis:

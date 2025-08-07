@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import Base and MarkerHit from scraper to ensure consistency
-from github_api_scraper import Base, MarkerHit
+from github_api_scraper import Base, MarkerHit, init_database
 
 # Database setup - PostgreSQL
 # Use environment variable for DATABASE_URL, fallback to SQLite for local development
@@ -71,8 +71,8 @@ class ScraperRequest(BaseModel):
     github_token: Optional[str] = None
     extract_contacts: Optional[bool] = True
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Initialize database on startup (but don't fail if it doesn't work)
+init_database()
 
 app = FastAPI(title="AI Code Generator Marker Backend")
 
