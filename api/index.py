@@ -393,7 +393,53 @@ async def run_scraper(request: ScraperRequest):
 # 2. Query: GET /hits, /hits?marker=.claude, /hits?owner_type=Organization, etc.
 # 3. Run scraper: POST /run-scraper (writes directly to database) 
 
-# Vercel handler for FastAPI
-from mangum import Mangum
+# Vercel handler - using standard Python function format
+from http.server import BaseHTTPRequestHandler
+import json
+import os
+from urllib.parse import urlparse, parse_qs
 
-handler = Mangum(app) 
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+        
+        # Parse the path
+        parsed_url = urlparse(self.path)
+        path = parsed_url.path
+        query_params = parse_qs(parsed_url.query)
+        
+        # Route to appropriate endpoint
+        if path == '/api/health':
+            response = {"status": "ok", "message": "Server is running", "database": "available" if 'engine' in globals() else "unavailable"}
+        elif path == '/api/markers':
+            response = [".claude", ".cursor", ".copilot"]  # Mock data for now
+        elif path == '/api/owner_types':
+            response = ["User", "Organization"]  # Mock data for now
+        elif path == '/api/owner_logins':
+            response = ["example-user", "example-org"]  # Mock data for now
+        elif path == '/api/contact-stats':
+            response = {
+                "total_records": 0,
+                "records_with_email": 0,
+                "records_with_any_contact": 0,
+                "email_percentage": 0,
+                "any_contact_percentage": 0
+            }
+        else:
+            response = {"message": "Endpoint not implemented", "path": path}
+            
+        self.wfile.write(json.dumps(response).encode())
+        return
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+        return 
