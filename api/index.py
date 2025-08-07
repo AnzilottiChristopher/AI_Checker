@@ -388,3 +388,8 @@ async def run_scraper(request: ScraperRequest):
 # 1. Start the server: uvicorn backend:app --reload
 # 2. Query: GET /hits, /hits?marker=.claude, /hits?owner_type=Organization, etc.
 # 3. Run scraper: POST /run-scraper (writes directly to database) 
+
+# Vercel handler for FastAPI
+from mangum import Mangum
+
+handler = Mangum(app) 
