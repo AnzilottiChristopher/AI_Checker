@@ -40,8 +40,10 @@ if DATABASE_URL.startswith("postgresql"):
         DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"), 
         pool_pre_ping=True, 
         pool_recycle=300,
-        pool_size=5,
-        max_overflow=10
+        pool_size=3,  # Reduced from 5 to 3
+        max_overflow=5,  # Reduced from 10 to 5
+        pool_timeout=30,  # Add timeout
+        echo=False  # Disable SQL echo for production
     )
 else:
     # SQLite configuration (for local development)
@@ -532,21 +534,40 @@ class GitHubAPIScraper:
             '.aicode',
         ]
         
-        # Use a single session for the entire operation to ensure consistency
-        session = SessionLocal()
-        
         # Track new records added in this run to prevent duplicates within the same run
         new_records_in_this_run = set()
         
         total_new_records = 0
         total_repos_found = 0
-        records_to_commit = []  # Batch records for better performance and reliability
         
-        # Pre-load existing records for more efficient duplicate checking
+        # Load existing records in chunks to prevent memory issues
         logger.info("Loading existing records for duplicate checking...")
-        existing_records = session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).all()
-        existing_set = {(record[0], record[1], record[2]) for record in existing_records}
-        logger.info(f"Loaded {len(existing_set)} existing records for duplicate checking")
+        existing_set = set()
+        
+        # Use a separate session for loading existing records
+        with SessionLocal() as load_session:
+            try:
+                # Load in chunks to prevent memory issues
+                chunk_size = 1000
+                offset = 0
+                while True:
+                    chunk = load_session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).offset(offset).limit(chunk_size).all()
+                    if not chunk:
+                        break
+                    
+                    chunk_set = {(record[0], record[1], record[2]) for record in chunk}
+                    existing_set.update(chunk_set)
+                    offset += chunk_size
+                    
+                    # Log progress for large datasets
+                    if offset % 5000 == 0:
+                        logger.info(f"Loaded {len(existing_set)} existing records so far...")
+                
+                logger.info(f"Loaded {len(existing_set)} existing records for duplicate checking")
+            except Exception as e:
+                logger.error(f"Error loading existing records: {e}")
+                # Continue with empty set if loading fails
+                existing_set = set()
         
         for marker in ai_markers:
             # Build the search query for the file path
@@ -567,6 +588,8 @@ class GitHubAPIScraper:
                     continue
                 
                 processed_count = 0
+                records_to_commit = []  # Reset batch for each marker
+                
                 for file in code_results:
                     # Limit processing per marker to avoid taking too long
                     if processed_count >= max_repos_per_pattern:
@@ -626,76 +649,77 @@ class GitHubAPIScraper:
                         
                         processed_count += 1
                         
-                        # Commit in larger batches for better performance (increased from 10 to 25)
-                        if len(records_to_commit) >= 25:
+                        # Commit in smaller batches for better resource management
+                        if len(records_to_commit) >= 10:  # Reduced from 25 to 10
                             try:
-                                session.add_all(records_to_commit)
-                                session.commit()
-                                total_new_records += len(records_to_commit)
-                                logger.info(f"Committed batch of {len(records_to_commit)} records")
-                                records_to_commit = []  # Clear the batch
+                                # Use a fresh session for each batch commit
+                                with SessionLocal() as batch_session:
+                                    batch_session.add_all(records_to_commit)
+                                    batch_session.commit()
+                                    total_new_records += len(records_to_commit)
+                                    logger.info(f"Committed batch of {len(records_to_commit)} records")
                             except IntegrityError as e:
                                 logger.warning(f"IntegrityError in batch commit (likely duplicate): {e}")
-                                session.rollback()
                                 # Try individual commits as fallback with better error handling
                                 successful_commits = 0
-                                for record in records_to_commit:
-                                    try:
-                                        # Double-check if record already exists before inserting
-                                        existing = session.query(MarkerHit).filter(
-                                            MarkerHit.marker == record.marker,
-                                            MarkerHit.repo_name == record.repo_name,
-                                            MarkerHit.file_path == record.file_path
-                                        ).first()
-                                        
-                                        if existing:
-                                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                with SessionLocal() as fallback_session:
+                                    for record in records_to_commit:
+                                        try:
+                                            # Double-check if record already exists before inserting
+                                            existing = fallback_session.query(MarkerHit).filter(
+                                                MarkerHit.marker == record.marker,
+                                                MarkerHit.repo_name == record.repo_name,
+                                                MarkerHit.file_path == record.file_path
+                                            ).first()
+                                            
+                                            if existing:
+                                                logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                                continue
+                                            
+                                            fallback_session.add(record)
+                                            fallback_session.commit()
+                                            successful_commits += 1
+                                        except IntegrityError as individual_error:
+                                            logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
+                                            fallback_session.rollback()
                                             continue
-                                        
-                                        session.add(record)
-                                        session.commit()
-                                        successful_commits += 1
-                                    except IntegrityError as individual_error:
-                                        logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
-                                        session.rollback()
-                                        continue
-                                    except Exception as individual_error:
-                                        logger.error(f"Failed to commit individual record: {individual_error}")
-                                        session.rollback()
-                                        continue
+                                        except Exception as individual_error:
+                                            logger.error(f"Failed to commit individual record: {individual_error}")
+                                            fallback_session.rollback()
+                                            continue
                                 
                                 total_new_records += successful_commits
                                 logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
-                                records_to_commit = []
                             except Exception as e:
                                 logger.error(f"Error committing batch: {e}")
-                                session.rollback()
                                 # Try individual commits as fallback with better error handling
                                 successful_commits = 0
-                                for record in records_to_commit:
-                                    try:
-                                        # Double-check if record already exists before inserting
-                                        existing = session.query(MarkerHit).filter(
-                                            MarkerHit.marker == record.marker,
-                                            MarkerHit.repo_name == record.repo_name,
-                                            MarkerHit.file_path == record.file_path
-                                        ).first()
-                                        
-                                        if existing:
-                                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                with SessionLocal() as fallback_session:
+                                    for record in records_to_commit:
+                                        try:
+                                            # Double-check if record already exists before inserting
+                                            existing = fallback_session.query(MarkerHit).filter(
+                                                MarkerHit.marker == record.marker,
+                                                MarkerHit.repo_name == record.repo_name,
+                                                MarkerHit.file_path == record.file_path
+                                            ).first()
+                                            
+                                            if existing:
+                                                logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                                continue
+                                            
+                                            fallback_session.add(record)
+                                            fallback_session.commit()
+                                            successful_commits += 1
+                                        except Exception as individual_error:
+                                            logger.error(f"Failed to commit individual record: {individual_error}")
+                                            fallback_session.rollback()
                                             continue
-                                        
-                                        session.add(record)
-                                        session.commit()
-                                        successful_commits += 1
-                                    except Exception as individual_error:
-                                        logger.error(f"Failed to commit individual record: {individual_error}")
-                                        session.rollback()
-                                        continue
                                 
                                 total_new_records += successful_commits
                                 logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
-                                records_to_commit = []
+                            
+                            records_to_commit = []  # Clear the batch
                         
                         logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path} (contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
                         
@@ -706,6 +730,73 @@ class GitHubAPIScraper:
                         logger.warning(f"Error processing file hit for {marker}: {e}")
                         continue
                 
+                # Commit any remaining records for this marker
+                if records_to_commit:
+                    try:
+                        with SessionLocal() as final_session:
+                            final_session.add_all(records_to_commit)
+                            final_session.commit()
+                            total_new_records += len(records_to_commit)
+                            logger.info(f"Committed final batch of {len(records_to_commit)} records for marker {marker}")
+                    except IntegrityError as e:
+                        logger.warning(f"IntegrityError in final batch commit for marker {marker} (likely duplicate): {e}")
+                        # Try individual commits as fallback
+                        successful_commits = 0
+                        with SessionLocal() as fallback_session:
+                            for record in records_to_commit:
+                                try:
+                                    existing = fallback_session.query(MarkerHit).filter(
+                                        MarkerHit.marker == record.marker,
+                                        MarkerHit.repo_name == record.repo_name,
+                                        MarkerHit.file_path == record.file_path
+                                    ).first()
+                                    
+                                    if existing:
+                                        logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                        continue
+                                    
+                                    fallback_session.add(record)
+                                    fallback_session.commit()
+                                    successful_commits += 1
+                                except IntegrityError as individual_error:
+                                    logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
+                                    fallback_session.rollback()
+                                    continue
+                                except Exception as individual_error:
+                                    logger.error(f"Failed to commit individual record: {individual_error}")
+                                    fallback_session.rollback()
+                                    continue
+                        
+                        total_new_records += successful_commits
+                        logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode for marker {marker}")
+                    except Exception as e:
+                        logger.error(f"Error committing final batch for marker {marker}: {e}")
+                        # Try individual commits as fallback
+                        successful_commits = 0
+                        with SessionLocal() as fallback_session:
+                            for record in records_to_commit:
+                                try:
+                                    existing = fallback_session.query(MarkerHit).filter(
+                                        MarkerHit.marker == record.marker,
+                                        MarkerHit.repo_name == record.repo_name,
+                                        MarkerHit.file_path == record.file_path
+                                    ).first()
+                                    
+                                    if existing:
+                                        logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                        continue
+                                    
+                                    fallback_session.add(record)
+                                    fallback_session.commit()
+                                    successful_commits += 1
+                                except Exception as individual_error:
+                                    logger.error(f"Failed to commit individual record: {individual_error}")
+                                    fallback_session.rollback()
+                                    continue
+                        
+                        total_new_records += successful_commits
+                        logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode for marker {marker}")
+                
                 logger.info(f"Processed {processed_count} hits for marker {marker}")
                 
                 # Reduced delay between markers (from 500ms to 200ms)
@@ -714,75 +805,6 @@ class GitHubAPIScraper:
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
         
-        # Commit any remaining records
-        if records_to_commit:
-            try:
-                session.add_all(records_to_commit)
-                session.commit()
-                total_new_records += len(records_to_commit)
-                logger.info(f"Committed final batch of {len(records_to_commit)} records")
-            except IntegrityError as e:
-                logger.warning(f"IntegrityError in final batch commit (likely duplicate): {e}")
-                session.rollback()
-                # Try individual commits as fallback with better error handling
-                successful_commits = 0
-                for record in records_to_commit:
-                    try:
-                        # Double-check if record already exists before inserting
-                        existing = session.query(MarkerHit).filter(
-                            MarkerHit.marker == record.marker,
-                            MarkerHit.repo_name == record.repo_name,
-                            MarkerHit.file_path == record.file_path
-                        ).first()
-                        
-                        if existing:
-                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
-                            continue
-                        
-                        session.add(record)
-                        session.commit()
-                        successful_commits += 1
-                    except IntegrityError as individual_error:
-                        logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
-                        session.rollback()
-                        continue
-                    except Exception as individual_error:
-                        logger.error(f"Failed to commit individual record: {individual_error}")
-                        session.rollback()
-                        continue
-                
-                total_new_records += successful_commits
-                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode")
-            except Exception as e:
-                logger.error(f"Error committing final batch: {e}")
-                session.rollback()
-                # Try individual commits as fallback with better error handling
-                successful_commits = 0
-                for record in records_to_commit:
-                    try:
-                        # Double-check if record already exists before inserting
-                        existing = session.query(MarkerHit).filter(
-                            MarkerHit.marker == record.marker,
-                            MarkerHit.repo_name == record.repo_name,
-                            MarkerHit.file_path == record.file_path
-                        ).first()
-                        
-                        if existing:
-                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
-                            continue
-                        
-                        session.add(record)
-                        session.commit()
-                        successful_commits += 1
-                    except Exception as individual_error:
-                        logger.error(f"Failed to commit individual record: {individual_error}")
-                        session.rollback()
-                        continue
-                
-                total_new_records += successful_commits
-                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode")
-        
-        session.close()
         logger.info(f"Total new records added: {total_new_records}")
         logger.info(f"Total repos found: {total_repos_found}")
         return {

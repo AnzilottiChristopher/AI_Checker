@@ -15,9 +15,35 @@ import psycopg
 import sys
 import logging
 import time
+import asyncio
+import signal
+from contextlib import asynccontextmanager
+import concurrent.futures
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def run_with_timeout(func, timeout_seconds=300, *args, **kwargs):
+    """
+    Run a function with a timeout to prevent infinite execution.
+    Default timeout is 5 minutes (300 seconds).
+    """
+    
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(func, *args, **kwargs)
+        try:
+            result = future.result(timeout=timeout_seconds)
+            return result
+        except concurrent.futures.TimeoutError:
+            logger.error(f"Function {func.__name__} timed out after {timeout_seconds} seconds")
+            raise HTTPException(status_code=408, detail=f"Operation timed out after {timeout_seconds} seconds")
+        except Exception as e:
+            logger.error(f"Function {func.__name__} failed: {e}")
+            raise e
 
 # Import our scraper modules
 from github_api_scraper import GitHubAPIScraper, init_database, MarkerHit
@@ -491,16 +517,31 @@ async def run_scraper(request: dict):
                 logging.info(f"Backup token {i+1} (first 8 chars: {token[:8]}...)")
         
         # Initialize database
-        init_database()
+        try:
+            init_database()
+        except Exception as e:
+            logging.error(f"Database initialization error: {e}")
+            raise HTTPException(status_code=500, detail=f"Database initialization failed: {str(e)}")
         
         # Create scraper instance with token rotation support
-        scraper = GitHubAPIScraper(github_token, backup_tokens)
+        try:
+            scraper = GitHubAPIScraper(github_token, backup_tokens)
+        except Exception as e:
+            logging.error(f"Scraper initialization error: {e}")
+            raise HTTPException(status_code=500, detail=f"Scraper initialization failed: {str(e)}")
         
         # Run scraper with optimized parameters
-        result = scraper.search_ai_code_generator_files_to_db(
-            max_repos_per_pattern=max_repos_per_pattern,
-            extract_contacts=extract_contacts
-        )
+        try:
+            def run_scraper_operation():
+                return scraper.search_ai_code_generator_files_to_db(
+                    max_repos_per_pattern=max_repos_per_pattern,
+                    extract_contacts=extract_contacts
+                )
+            
+            result = run_with_timeout(run_scraper_operation, timeout_seconds=600)  # 10 minute timeout
+        except Exception as e:
+            logging.error(f"Scraper execution error: {e}")
+            raise HTTPException(status_code=500, detail=f"Scraper execution failed: {str(e)}")
         
         # Log token usage statistics
         if hasattr(scraper, 'rate_limit_errors') and scraper.rate_limit_errors:
@@ -515,8 +556,12 @@ async def run_scraper(request: dict):
             "rate_limit_errors": scraper.rate_limit_errors if hasattr(scraper, 'rate_limit_errors') else {}
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scraper error: {str(e)}")
+        logging.error(f"Unexpected error in run_scraper: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected scraper error: {str(e)}")
 
 @app.post("/api/update-commit-dates")
 async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
@@ -664,17 +709,32 @@ async def run_scraper_fast(request: dict):
                 logging.info(f"Backup token {i+1} (first 8 chars: {token[:8]}...)")
         
         # Initialize database
-        init_database()
+        try:
+            init_database()
+        except Exception as e:
+            logging.error(f"Database initialization error: {e}")
+            raise HTTPException(status_code=500, detail=f"Database initialization failed: {str(e)}")
         
         # Create scraper instance with token rotation support
-        scraper = GitHubAPIScraper(github_token, backup_tokens)
+        try:
+            scraper = GitHubAPIScraper(github_token, backup_tokens)
+        except Exception as e:
+            logging.error(f"Scraper initialization error: {e}")
+            raise HTTPException(status_code=500, detail=f"Scraper initialization failed: {str(e)}")
         
         # Run scraper with high-throughput parameters
-        result = scraper.search_ai_code_generator_files_to_db(
-            max_repos_per_pattern=50,  # Much higher limit
-            extract_contacts=False,  # Skip contact extraction for speed
-            min_stars=0  # Include all repos regardless of stars
-        )
+        try:
+            def run_fast_scraper_operation():
+                return scraper.search_ai_code_generator_files_to_db(
+                    max_repos_per_pattern=50,  # Much higher limit
+                    extract_contacts=False,  # Skip contact extraction for speed
+                    min_stars=0  # Include all repos regardless of stars
+                )
+            
+            result = run_with_timeout(run_fast_scraper_operation, timeout_seconds=900)  # 15 minute timeout for fast scraper
+        except Exception as e:
+            logging.error(f"Fast scraper execution error: {e}")
+            raise HTTPException(status_code=500, detail=f"Fast scraper execution failed: {str(e)}")
         
         # Log token usage statistics
         if hasattr(scraper, 'rate_limit_errors') and scraper.rate_limit_errors:
@@ -689,8 +749,12 @@ async def run_scraper_fast(request: dict):
             "rate_limit_errors": scraper.rate_limit_errors if hasattr(scraper, 'rate_limit_errors') else {}
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fast scraper error: {str(e)}")
+        logging.error(f"Unexpected error in run_scraper_fast: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected fast scraper error: {str(e)}")
 
 @app.get("/")
 async def root():
