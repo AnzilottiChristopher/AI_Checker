@@ -121,6 +121,9 @@ class GitHubAPIScraper:
         self.session = requests.Session()
         if token:
             self.session.headers.update({'Authorization': f'token {token}'})
+            logger.info(f"GitHub API initialized with token (first 8 chars: {token[:8]}...)")
+        else:
+            logger.warning("GitHub API initialized without token - limited rate limits")
         
         # Rate limiting
         self.requests_made = 0
@@ -131,16 +134,28 @@ class GitHubAPIScraper:
         try:
             rate_limit = self.github.get_rate_limit()
             remaining = rate_limit.core.remaining
+            limit = rate_limit.core.limit
             
-            if remaining < 100:  # Conservative threshold
+            # Log rate limit status to verify token is working
+            if self.token:
+                logger.info(f"Rate limit: {remaining}/{limit} remaining (authenticated)")
+            else:
+                logger.info(f"Rate limit: {remaining}/{limit} remaining (unauthenticated)")
+            
+            if remaining < 50:  # More conservative threshold
                 reset_time = rate_limit.core.reset.timestamp()
                 current_time = time.time()
                 sleep_time = max(reset_time - current_time, 60)
                 
                 logger.warning(f"Rate limit low ({remaining} remaining). Sleeping for {sleep_time:.0f} seconds...")
                 time.sleep(sleep_time)
+            elif remaining < 200:  # Add small delay when getting low
+                logger.info(f"Rate limit getting low ({remaining} remaining). Adding small delay...")
+                time.sleep(1)  # 1 second delay
         except Exception as e:
             logger.warning(f"Error checking rate limit: {e}")
+            # If we can't check rate limit, add a conservative delay
+            time.sleep(2)
     
     def search_repositories(self, query: str, max_repos: int = 10, min_stars: int = 0) -> List[Dict]:
         """
@@ -398,6 +413,7 @@ class GitHubAPIScraper:
         new_records_in_this_run = set()
         
         total_new_records = 0
+        total_repos_found = 0
         records_to_commit = []  # Batch records for better performance and reliability
         
         for marker in ai_markers:
@@ -420,6 +436,8 @@ class GitHubAPIScraper:
                         
                     try:
                         repo = file.repository
+                        total_repos_found += 1
+                        
                         # Check if this result already exists in database OR in this run
                         result_key = (marker, repo.full_name, file.path)
                         if result_key in existing_set or result_key in new_records_in_this_run:
@@ -441,6 +459,7 @@ class GitHubAPIScraper:
                         # Get latest commit date for the repository
                         latest_commit_date = self.get_latest_commit_date(repo.full_name)
                         
+                        # Create new record without specifying ID (let database auto-increment)
                         new_hit = MarkerHit(
                             marker=marker,
                             repo_name=repo.full_name,
@@ -477,22 +496,46 @@ class GitHubAPIScraper:
                             except Exception as e:
                                 logger.error(f"Error committing batch: {e}")
                                 session.rollback()
-                                # Try individual commits as fallback
+                                # Try individual commits as fallback with better error handling
+                                successful_commits = 0
                                 for record in records_to_commit:
                                     try:
+                                        # Check if record already exists before inserting
+                                        existing = session.query(MarkerHit).filter(
+                                            MarkerHit.marker == record.marker,
+                                            MarkerHit.repo_name == record.repo_name,
+                                            MarkerHit.file_path == record.file_path
+                                        ).first()
+                                        
+                                        if existing:
+                                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                            continue
+                                        
                                         session.add(record)
                                         session.commit()
+                                        successful_commits += 1
                                     except Exception as individual_error:
                                         logger.error(f"Failed to commit individual record: {individual_error}")
                                         session.rollback()
+                                        continue
+                                
+                                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
                                 records_to_commit = []
                         
                         logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path} (contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
+                        
+                        # Add delay to respect rate limits
+                        time.sleep(0.1)  # 100ms delay between requests
+                        
                     except Exception as e:
                         logger.warning(f"Error processing file hit for {marker}: {e}")
                         continue
                 
                 logger.info(f"Processed {processed_count} hits for marker {marker}")
+                
+                # Add delay between markers to respect rate limits
+                time.sleep(0.5)  # 500ms delay between markers
+                
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
         
@@ -505,10 +548,39 @@ class GitHubAPIScraper:
             except Exception as e:
                 logger.error(f"Error committing final batch: {e}")
                 session.rollback()
+                # Try individual commits as fallback with better error handling
+                successful_commits = 0
+                for record in records_to_commit:
+                    try:
+                        # Check if record already exists before inserting
+                        existing = session.query(MarkerHit).filter(
+                            MarkerHit.marker == record.marker,
+                            MarkerHit.repo_name == record.repo_name,
+                            MarkerHit.file_path == record.file_path
+                        ).first()
+                        
+                        if existing:
+                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                            continue
+                        
+                        session.add(record)
+                        session.commit()
+                        successful_commits += 1
+                    except Exception as individual_error:
+                        logger.error(f"Failed to commit individual record: {individual_error}")
+                        session.rollback()
+                        continue
+                
+                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode")
         
         session.close()
         logger.info(f"Total new records added: {total_new_records}")
-        return {"total_new_records": total_new_records}
+        logger.info(f"Total repos found: {total_repos_found}")
+        return {
+            "total_new_records": total_new_records,
+            "total_repos_found": total_repos_found,
+            "summary": f"Found {total_repos_found} repositories, added {total_new_records} new records"
+        }
 
     def extract_contact_info(self, username: str) -> Dict[str, Optional[str]]:
         """

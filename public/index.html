@@ -229,6 +229,17 @@
             border-color: hsl(var(--primary));
         }
 
+        .btn-secondary {
+            background: hsl(var(--muted));
+            color: hsl(var(--muted-foreground));
+            border: 1px solid hsl(var(--border));
+        }
+
+        .btn-secondary:hover {
+            background: hsl(var(--muted) / 0.8);
+            border-color: hsl(var(--primary));
+        }
+
         .btn-success {
             background: var(--gradient-success);
             box-shadow: var(--shadow-success-glow);
@@ -951,6 +962,9 @@
                             <button class="btn btn-outline" onclick="updateCommitDates()" id="updateCommitBtn">
                                 📅 Update Commit Dates
                             </button>
+                            <button class="btn btn-secondary" onclick="testGitHubToken()" id="testTokenBtn">
+                                🔑 Test Token
+                            </button>
                         </div>
                         
                         <div id="importResult"></div>
@@ -1380,6 +1394,68 @@
 
             updateCommitBtn.disabled = false;
             updateCommitBtn.innerHTML = '📅 Update Commit Dates';
+        }
+
+        // Test GitHub token
+        async function testGitHubToken() {
+            const testTokenBtn = document.getElementById('testTokenBtn');
+            const importResult = document.getElementById('importResult');
+            
+            // Get GitHub token from input field or prompt
+            let githubToken = document.getElementById('githubToken').value;
+            if (!githubToken) {
+                githubToken = prompt('Enter your GitHub token to test:');
+                if (!githubToken) {
+                    showAlert('❌ GitHub token is required to test', 'error');
+                    return;
+                }
+            }
+            
+            // Disable button and show progress
+            testTokenBtn.disabled = true;
+            testTokenBtn.innerHTML = '⏳ Testing...';
+            
+            try {
+                const requestBody = {
+                    github_token: githubToken
+                };
+
+                const response = await fetch(`${API_BASE}/test-github-token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.authenticated) {
+                        showAlert(`✅ ${data.message}`, 'success');
+                        
+                        // Show detailed results
+                        const resultHtml = `
+                            <div class="alert alert-success" style="margin-top: 1rem;">
+                                <h4>GitHub Token Test Results:</h4>
+                                <p><strong>Status:</strong> ✅ Authenticated</p>
+                                <p><strong>Rate Limit:</strong> ${data.rate_limit_remaining}/${data.rate_limit_total} remaining</p>
+                                <p><strong>Message:</strong> ${data.message}</p>
+                            </div>
+                        `;
+                        importResult.innerHTML = resultHtml;
+                    } else {
+                        showAlert(`❌ ${data.message}`, 'error');
+                    }
+                } else {
+                    const error = await response.json();
+                    showAlert(`❌ Token test failed: ${error.detail}`, 'error');
+                }
+            } catch (error) {
+                showAlert(`❌ Token test failed: ${error.message}`, 'error');
+            }
+
+            testTokenBtn.disabled = false;
+            testTokenBtn.innerHTML = '🔑 Test Token';
         }
 
         // Marker dropdown functions

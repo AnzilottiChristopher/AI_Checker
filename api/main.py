@@ -481,6 +481,9 @@ async def run_scraper(request: dict):
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
         
+        # Log token verification (first 8 chars only for security)
+        logging.info(f"Scraper initialized with GitHub token (first 8 chars: {github_token[:8]}...)")
+        
         # Initialize database
         init_database()
         
@@ -488,12 +491,13 @@ async def run_scraper(request: dict):
         scraper = GitHubAPIScraper(github_token)
         
         # Run scraper
-        new_records = scraper.search_ai_code_generator_files_to_db(extract_contacts=extract_contacts)
+        result = scraper.search_ai_code_generator_files_to_db(extract_contacts=extract_contacts)
         
         return {
             "status": "success",
-            "message": f"Scraper completed successfully. Added {new_records} new records.",
-            "new_records": new_records
+            "message": result.get("summary", f"Scraper completed successfully. Added {result.get('total_new_records', 0)} new records."),
+            "total_repos_found": result.get("total_repos_found", 0),
+            "new_records": result.get("total_new_records", 0)
         }
         
     except Exception as e:
@@ -507,6 +511,9 @@ async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
         
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
+        
+        # Log token verification (first 8 chars only for security)
+        logging.info(f"Update commit dates initialized with GitHub token (first 8 chars: {github_token[:8]}...)")
         
         # Initialize database
         init_database()
@@ -560,6 +567,41 @@ async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Update error: {str(e)}")
+
+@app.post("/api/test-github-token")
+async def test_github_token(request: dict):
+    """Test GitHub token authentication and rate limits"""
+    try:
+        github_token = request.get('github_token')
+        
+        if not github_token:
+            raise HTTPException(status_code=400, detail="GitHub token is required")
+        
+        # Create scraper instance
+        scraper = GitHubAPIScraper(github_token)
+        
+        # Test rate limit to verify token is working
+        try:
+            rate_limit = scraper.github.get_rate_limit()
+            remaining = rate_limit.core.remaining
+            limit = rate_limit.core.limit
+            
+            return {
+                "status": "success",
+                "message": f"GitHub token is working! Rate limit: {remaining}/{limit} remaining",
+                "rate_limit_remaining": remaining,
+                "rate_limit_total": limit,
+                "authenticated": True
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"GitHub token test failed: {str(e)}",
+                "authenticated": False
+            }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Token test error: {str(e)}")
 
 @app.get("/")
 async def root():
