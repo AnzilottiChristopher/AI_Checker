@@ -15,7 +15,7 @@ from urllib.parse import urljoin, urlparse
 from pathlib import Path
 from collections import Counter
 import sqlalchemy
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, func
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, func, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import psycopg
@@ -67,6 +67,11 @@ class MarkerHit(Base):
     contact_extracted_at = Column(String, default=lambda: datetime.utcnow().isoformat())
     # Repository activity fields
     latest_commit_date = Column(String)
+    
+    # Add unique constraint to prevent duplicates
+    __table_args__ = (
+        UniqueConstraint('marker', 'repo_name', 'file_path', name='unique_marker_repo_file'),
+    )
 
 # Database initialization function
 def init_database():
@@ -115,19 +120,95 @@ class GitHubAPIScraper:
     Provides methods to search for repositories, fetch file contents, and handle rate limits.
     """
     
-    def __init__(self, token: Optional[str] = None):
-        self.token = token
-        self.github = Github(token) if token else Github()
-        self.session = requests.Session()
-        if token:
-            self.session.headers.update({'Authorization': f'token {token}'})
-            logger.info(f"GitHub API initialized with token (first 8 chars: {token[:8]}...)")
+    def __init__(self, token: Optional[str] = None, backup_tokens: Optional[List[str]] = None):
+        self.tokens = [token] if token else []
+        if backup_tokens:
+            self.tokens.extend(backup_tokens)
+        
+        self.current_token_index = 0
+        self.token_usage_count = {}  # Track usage per token
+        self.rate_limit_errors = {}  # Track rate limit errors per token
+        
+        # Initialize with first available token
+        if self.tokens:
+            self._initialize_with_token(self.tokens[0])
+            logger.info(f"GitHub API initialized with primary token (first 8 chars: {self.tokens[0][:8]}...)")
+            if len(self.tokens) > 1:
+                logger.info(f"Backup tokens available: {len(self.tokens) - 1}")
         else:
+            self.github = Github()
+            self.session = requests.Session()
             logger.warning("GitHub API initialized without token - limited rate limits")
         
         # Rate limiting
         self.requests_made = 0
         self.rate_limit_delay = 1.0  # seconds between requests
+        self.secondary_rate_limit_delay = 5.0  # longer delay for secondary rate limits
+    
+    def _initialize_with_token(self, token: str):
+        """Initialize GitHub client and session with a specific token."""
+        self.github = Github(token)
+        self.session = requests.Session()
+        self.session.headers.update({'Authorization': f'token {token}'})
+        self.current_token = token
+    
+    def _rotate_token(self):
+        """Rotate to the next available token."""
+        if len(self.tokens) <= 1:
+            logger.warning("No backup tokens available for rotation")
+            return False
+        
+        self.current_token_index = (self.current_token_index + 1) % len(self.tokens)
+        new_token = self.tokens[self.current_token_index]
+        
+        logger.info(f"Rotating to token {self.current_token_index + 1}/{len(self.tokens)} (first 8 chars: {new_token[:8]}...)")
+        self._initialize_with_token(new_token)
+        return True
+    
+    def _handle_rate_limit_error(self, error_msg: str, operation: str = "API call"):
+        """
+        Handle rate limit errors intelligently.
+        Returns True if we should retry the operation, False otherwise.
+        """
+        current_token = self.tokens[self.current_token_index] if self.tokens else None
+        
+        # Track rate limit errors for this token
+        if current_token:
+            if current_token not in self.rate_limit_errors:
+                self.rate_limit_errors[current_token] = 0
+            self.rate_limit_errors[current_token] += 1
+        
+        # Check if this is a secondary rate limit (abuse rate limit)
+        is_secondary_rate_limit = any(keyword in error_msg.lower() for keyword in [
+            'abuse', 'secondary', 'burst', 'too many requests', 'rate limit exceeded'
+        ])
+        
+        if is_secondary_rate_limit:
+            logger.warning(f"Secondary rate limit detected for {operation}. Error: {error_msg}")
+            
+            # For secondary rate limits, try token rotation first
+            if len(self.tokens) > 1:
+                logger.info("Attempting token rotation for secondary rate limit...")
+                if self._rotate_token():
+                    logger.info("Token rotated successfully, will retry operation")
+                    return True
+            
+            # If no backup tokens or rotation failed, wait longer
+            logger.warning(f"Waiting {self.secondary_rate_limit_delay} seconds for secondary rate limit...")
+            time.sleep(self.secondary_rate_limit_delay)
+            return True
+        
+        else:
+            # Primary rate limit - check if we can rotate tokens
+            if len(self.tokens) > 1:
+                logger.info("Primary rate limit reached, attempting token rotation...")
+                if self._rotate_token():
+                    logger.info("Token rotated successfully, will retry operation")
+                    return True
+            
+            # If no backup tokens, wait for rate limit reset
+            logger.warning(f"Primary rate limit reached for {operation}. Waiting for reset...")
+            return False
     
     def check_rate_limit(self):
         """Check and handle GitHub API rate limits. Sleeps if close to limit."""
@@ -137,7 +218,8 @@ class GitHubAPIScraper:
             limit = rate_limit.core.limit
             
             # Log rate limit status to verify token is working
-            if self.token:
+            current_token = self.tokens[self.current_token_index] if self.tokens else None
+            if current_token:
                 logger.info(f"Rate limit: {remaining}/{limit} remaining (authenticated)")
             else:
                 logger.info(f"Rate limit: {remaining}/{limit} remaining (unauthenticated)")
@@ -157,6 +239,43 @@ class GitHubAPIScraper:
             # If we can't check rate limit, add a conservative delay
             time.sleep(2)
     
+    def _make_api_call_with_retry(self, api_call_func, *args, **kwargs):
+        """
+        Make an API call with automatic retry and token rotation on rate limit errors.
+        
+        Args:
+            api_call_func: Function that makes the API call
+            *args, **kwargs: Arguments to pass to the API call function
+            
+        Returns:
+            The result of the API call, or None if all retries failed
+        """
+        max_retries = len(self.tokens) if self.tokens else 1
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                return api_call_func(*args, **kwargs)
+            except Exception as e:
+                error_msg = str(e)
+                
+                # Check if this is a rate limit error
+                if "rate limit" in error_msg.lower() or "403" in error_msg:
+                    if self._handle_rate_limit_error(error_msg, f"API call (attempt {retry_count + 1})"):
+                        retry_count += 1
+                        continue
+                    else:
+                        # Primary rate limit with no backup tokens, wait for reset
+                        logger.error(f"Rate limit exceeded and no backup tokens available. Error: {error_msg}")
+                        return None
+                else:
+                    # Non-rate-limit error, don't retry
+                    logger.error(f"API call failed with non-rate-limit error: {error_msg}")
+                    return None
+        
+        logger.error(f"All {max_retries} retry attempts failed")
+        return None
+    
     def search_repositories(self, query: str, max_repos: int = 10, min_stars: int = 0) -> List[Dict]:
         """
         Search for repositories using GitHub API.
@@ -167,7 +286,16 @@ class GitHubAPIScraper:
             if min_stars > 0:
                 query += f" stars:>={min_stars}"
                 
-            repos = self.github.search_repositories(query=query, sort="stars", order="desc")
+            # Use retry mechanism for the search
+            repos = self._make_api_call_with_retry(
+                self.github.search_repositories, 
+                query=query, sort="stars", order="desc"
+            )
+            
+            if repos is None:
+                logger.error("Failed to search repositories after all retries")
+                return []
+            
             results = []
             
             for i, repo in enumerate(repos):
@@ -405,10 +533,6 @@ class GitHubAPIScraper:
         # Use a single session for the entire operation to ensure consistency
         session = SessionLocal()
         
-        # Get existing records from database for duplicate checking
-        existing_records = session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).all()
-        existing_set = {(record[0], record[1], record[2]) for record in existing_records}
-        
         # Track new records added in this run to prevent duplicates within the same run
         new_records_in_this_run = set()
         
@@ -425,7 +549,14 @@ class GitHubAPIScraper:
             try:
                 self.check_rate_limit()
                 # Use the GitHub API to search for code files with the marker path
-                code_results = self.github.search_code(query=query)
+                code_results = self._make_api_call_with_retry(
+                    self.github.search_code, 
+                    query=query
+                )
+                
+                if code_results is None:
+                    logger.error(f"Failed to search for marker {marker} after all retries")
+                    continue
                 
                 processed_count = 0
                 for file in code_results:
@@ -440,8 +571,19 @@ class GitHubAPIScraper:
                         
                         # Check if this result already exists in database OR in this run
                         result_key = (marker, repo.full_name, file.path)
-                        if result_key in existing_set or result_key in new_records_in_this_run:
-                            logger.debug(f"Skipping duplicate: {marker} - {repo.full_name}/{file.path}")
+                        if result_key in new_records_in_this_run:
+                            logger.debug(f"Skipping duplicate in this run: {marker} - {repo.full_name}/{file.path}")
+                            continue  # Skip this result
+                        
+                        # Check if record already exists in database (more efficient than loading all records)
+                        existing = session.query(MarkerHit).filter(
+                            MarkerHit.marker == marker,
+                            MarkerHit.repo_name == repo.full_name,
+                            MarkerHit.file_path == file.path
+                        ).first()
+                        
+                        if existing:
+                            logger.debug(f"Skipping existing record: {marker} - {repo.full_name}/{file.path}")
                             continue  # Skip this result
                         
                         # Extract contact information for the repository owner (optional)
@@ -479,9 +621,8 @@ class GitHubAPIScraper:
                         # Add to batch instead of immediate commit
                         records_to_commit.append(new_hit)
                         
-                        # Add to tracking sets to prevent duplicates
+                        # Add to tracking set to prevent duplicates within this run
                         new_records_in_this_run.add(result_key)
-                        existing_set.add(result_key)  # Update existing set for this run
                         
                         total_new_records += 1
                         processed_count += 1
@@ -500,7 +641,7 @@ class GitHubAPIScraper:
                                 successful_commits = 0
                                 for record in records_to_commit:
                                     try:
-                                        # Check if record already exists before inserting
+                                        # Double-check if record already exists before inserting
                                         existing = session.query(MarkerHit).filter(
                                             MarkerHit.marker == record.marker,
                                             MarkerHit.repo_name == record.repo_name,
@@ -552,7 +693,7 @@ class GitHubAPIScraper:
                 successful_commits = 0
                 for record in records_to_commit:
                     try:
-                        # Check if record already exists before inserting
+                        # Double-check if record already exists before inserting
                         existing = session.query(MarkerHit).filter(
                             MarkerHit.marker == record.marker,
                             MarkerHit.repo_name == record.repo_name,

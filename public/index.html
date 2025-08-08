@@ -943,6 +943,14 @@
                         </div>
                         
                         <div class="form-group">
+                            <label class="form-label">Backup GitHub Tokens (Optional):</label>
+                            <textarea class="form-input" id="backupTokens" placeholder="Enter backup tokens, one per line (optional)" rows="3" style="resize: vertical;"></textarea>
+                            <small style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">
+                                Add backup tokens for automatic rotation when rate limits are hit. One token per line.
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
                             <label class="form-label">Extract Contact Info:</label>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <input type="checkbox" id="extractContacts" checked style="width: auto;">
@@ -1262,8 +1270,21 @@
                 const requestBody = {
                     extract_contacts: document.getElementById('extractContacts').checked
                 };
+                
+                // Get primary token
                 if (githubToken) {
                     requestBody.github_token = githubToken;
+                }
+                
+                // Get backup tokens
+                const backupTokensText = document.getElementById('backupTokens').value;
+                if (backupTokensText.trim()) {
+                    const backupTokens = backupTokensText.split('\n')
+                        .map(token => token.trim())
+                        .filter(token => token.length > 0);
+                    if (backupTokens.length > 0) {
+                        requestBody.backup_tokens = backupTokens;
+                    }
                 }
 
                 const response = await fetch(`${API_BASE}/run-scraper`, {
@@ -1284,12 +1305,24 @@
                     showAlert(`✅ ${data.message}`, 'success');
                     
                     // Show detailed results
-                    const resultHtml = `
+                    let resultHtml = `
                         <div class="alert alert-success" style="margin-top: 1rem;">
                             <h4>Scraper Results:</h4>
                             <p><strong>New records added to database:</strong> ${data.new_records}</p>
-                        </div>
+                            <p><strong>Total repositories found:</strong> ${data.total_repos_found}</p>
+                            <p><strong>Tokens used:</strong> ${data.tokens_used || 1}</p>
                     `;
+                    
+                    // Add rate limit error information if available
+                    if (data.rate_limit_errors && Object.keys(data.rate_limit_errors).length > 0) {
+                        resultHtml += `<p><strong>Rate limit errors by token:</strong></p><ul>`;
+                        Object.entries(data.rate_limit_errors).forEach(([token, errors]) => {
+                            resultHtml += `<li>Token ${token.substring(0, 8)}...: ${errors} errors</li>`;
+                        });
+                        resultHtml += `</ul>`;
+                    }
+                    
+                    resultHtml += `</div>`;
                     importResult.innerHTML = resultHtml;
                     
                     // Refresh filters to show new data
@@ -1350,6 +1383,17 @@
                 const requestBody = {
                     github_token: githubToken
                 };
+                
+                // Get backup tokens from input field
+                const backupTokensText = document.getElementById('backupTokens').value;
+                if (backupTokensText.trim()) {
+                    const backupTokens = backupTokensText.split('\n')
+                        .map(token => token.trim())
+                        .filter(token => token.length > 0);
+                    if (backupTokens.length > 0) {
+                        requestBody.backup_tokens = backupTokens;
+                    }
+                }
 
                 const response = await fetch(`${API_BASE}/update-commit-dates`, {
                     method: 'POST',
@@ -1419,6 +1463,17 @@
                 const requestBody = {
                     github_token: githubToken
                 };
+                
+                // Get backup tokens from input field
+                const backupTokensText = document.getElementById('backupTokens').value;
+                if (backupTokensText.trim()) {
+                    const backupTokens = backupTokensText.split('\n')
+                        .map(token => token.trim())
+                        .filter(token => token.length > 0);
+                    if (backupTokens.length > 0) {
+                        requestBody.backup_tokens = backupTokens;
+                    }
+                }
 
                 const response = await fetch(`${API_BASE}/test-github-token`, {
                     method: 'POST',
@@ -1434,14 +1489,29 @@
                         showAlert(`✅ ${data.message}`, 'success');
                         
                         // Show detailed results
-                        const resultHtml = `
+                        let resultHtml = `
                             <div class="alert alert-success" style="margin-top: 1rem;">
                                 <h4>GitHub Token Test Results:</h4>
                                 <p><strong>Status:</strong> ✅ Authenticated</p>
                                 <p><strong>Rate Limit:</strong> ${data.rate_limit_remaining}/${data.rate_limit_total} remaining</p>
                                 <p><strong>Message:</strong> ${data.message}</p>
-                            </div>
+                                <p><strong>Tokens Available:</strong> ${data.tokens_available || 1}</p>
                         `;
+                        
+                        // Add backup token results if available
+                        if (data.backup_tokens_tested && data.backup_tokens_tested.length > 0) {
+                            resultHtml += `<p><strong>Backup Tokens Tested:</strong></p><ul>`;
+                            data.backup_tokens_tested.forEach(token => {
+                                if (token.status === 'working') {
+                                    resultHtml += `<li>✅ Token ${token.token_index}: ${token.rate_limit_remaining}/${token.rate_limit_total} remaining</li>`;
+                                } else {
+                                    resultHtml += `<li>❌ Token ${token.token_index}: ${token.error}</li>`;
+                                }
+                            });
+                            resultHtml += `</ul>`;
+                        }
+                        
+                        resultHtml += `</div>`;
                         importResult.innerHTML = resultHtml;
                     } else {
                         showAlert(`❌ ${data.message}`, 'error');

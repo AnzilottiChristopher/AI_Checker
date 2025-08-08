@@ -473,31 +473,42 @@ async def get_top_repos(
 
 @app.post("/api/run-scraper")
 async def run_scraper(request: dict):
-    """Run the scraper"""
+    """Run the scraper with support for multiple tokens"""
     try:
         github_token = request.get('github_token')
+        backup_tokens = request.get('backup_tokens', [])  # List of backup tokens
         extract_contacts = request.get('extract_contacts', True)
         
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
         
         # Log token verification (first 8 chars only for security)
-        logging.info(f"Scraper initialized with GitHub token (first 8 chars: {github_token[:8]}...)")
+        logging.info(f"Scraper initialized with primary GitHub token (first 8 chars: {github_token[:8]}...)")
+        if backup_tokens:
+            logging.info(f"Backup tokens available: {len(backup_tokens)}")
+            for i, token in enumerate(backup_tokens):
+                logging.info(f"Backup token {i+1} (first 8 chars: {token[:8]}...)")
         
         # Initialize database
         init_database()
         
-        # Create scraper instance
-        scraper = GitHubAPIScraper(github_token)
+        # Create scraper instance with token rotation support
+        scraper = GitHubAPIScraper(github_token, backup_tokens)
         
         # Run scraper
         result = scraper.search_ai_code_generator_files_to_db(extract_contacts=extract_contacts)
+        
+        # Log token usage statistics
+        if hasattr(scraper, 'rate_limit_errors') and scraper.rate_limit_errors:
+            logging.info(f"Rate limit errors by token: {scraper.rate_limit_errors}")
         
         return {
             "status": "success",
             "message": result.get("summary", f"Scraper completed successfully. Added {result.get('total_new_records', 0)} new records."),
             "total_repos_found": result.get("total_repos_found", 0),
-            "new_records": result.get("total_new_records", 0)
+            "new_records": result.get("total_new_records", 0),
+            "tokens_used": len(scraper.tokens) if hasattr(scraper, 'tokens') else 1,
+            "rate_limit_errors": scraper.rate_limit_errors if hasattr(scraper, 'rate_limit_errors') else {}
         }
         
     except Exception as e:
@@ -505,21 +516,26 @@ async def run_scraper(request: dict):
 
 @app.post("/api/update-commit-dates")
 async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
-    """Update missing commit dates for existing records"""
+    """Update missing commit dates for existing records with support for multiple tokens"""
     try:
         github_token = request.get('github_token')
+        backup_tokens = request.get('backup_tokens', [])  # List of backup tokens
         
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
         
         # Log token verification (first 8 chars only for security)
-        logging.info(f"Update commit dates initialized with GitHub token (first 8 chars: {github_token[:8]}...)")
+        logging.info(f"Update commit dates initialized with primary GitHub token (first 8 chars: {github_token[:8]}...)")
+        if backup_tokens:
+            logging.info(f"Backup tokens available: {len(backup_tokens)}")
+            for i, token in enumerate(backup_tokens):
+                logging.info(f"Backup token {i+1} (first 8 chars: {token[:8]}...)")
         
         # Initialize database
         init_database()
         
-        # Create scraper instance
-        scraper = GitHubAPIScraper(github_token)
+        # Create scraper instance with token rotation support
+        scraper = GitHubAPIScraper(github_token, backup_tokens)
         
         # Get records with missing commit dates (including "N/A" values)
         records_without_dates = db.query(MarkerHit).filter(
@@ -570,15 +586,16 @@ async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
 
 @app.post("/api/test-github-token")
 async def test_github_token(request: dict):
-    """Test GitHub token authentication and rate limits"""
+    """Test GitHub token authentication and rate limits with support for multiple tokens"""
     try:
         github_token = request.get('github_token')
+        backup_tokens = request.get('backup_tokens', [])  # List of backup tokens
         
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
         
-        # Create scraper instance
-        scraper = GitHubAPIScraper(github_token)
+        # Create scraper instance with token rotation support
+        scraper = GitHubAPIScraper(github_token, backup_tokens)
         
         # Test rate limit to verify token is working
         try:
@@ -586,12 +603,34 @@ async def test_github_token(request: dict):
             remaining = rate_limit.core.remaining
             limit = rate_limit.core.limit
             
+            # Test all tokens if backup tokens are provided
+            token_results = []
+            if backup_tokens:
+                for i, token in enumerate(backup_tokens):
+                    try:
+                        test_scraper = GitHubAPIScraper(token)
+                        test_rate_limit = test_scraper.github.get_rate_limit()
+                        token_results.append({
+                            "token_index": i + 1,
+                            "rate_limit_remaining": test_rate_limit.core.remaining,
+                            "rate_limit_total": test_rate_limit.core.limit,
+                            "status": "working"
+                        })
+                    except Exception as e:
+                        token_results.append({
+                            "token_index": i + 1,
+                            "status": "failed",
+                            "error": str(e)
+                        })
+            
             return {
                 "status": "success",
                 "message": f"GitHub token is working! Rate limit: {remaining}/{limit} remaining",
                 "rate_limit_remaining": remaining,
                 "rate_limit_total": limit,
-                "authenticated": True
+                "authenticated": True,
+                "tokens_available": len(scraper.tokens) if hasattr(scraper, 'tokens') else 1,
+                "backup_tokens_tested": token_results if backup_tokens else []
             }
         except Exception as e:
             return {
