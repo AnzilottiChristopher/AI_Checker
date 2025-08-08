@@ -18,6 +18,7 @@ import sqlalchemy
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, func, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import IntegrityError
 import psycopg
 from github import Github
 import re
@@ -540,6 +541,12 @@ class GitHubAPIScraper:
         total_repos_found = 0
         records_to_commit = []  # Batch records for better performance and reliability
         
+        # Pre-load existing records for more efficient duplicate checking
+        logger.info("Loading existing records for duplicate checking...")
+        existing_records = session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).all()
+        existing_set = {(record[0], record[1], record[2]) for record in existing_records}
+        logger.info(f"Loaded {len(existing_set)} existing records for duplicate checking")
+        
         for marker in ai_markers:
             # Build the search query for the file path
             query = f'path:{marker}'
@@ -571,19 +578,8 @@ class GitHubAPIScraper:
                         
                         # Check if this result already exists in database OR in this run
                         result_key = (marker, repo.full_name, file.path)
-                        if result_key in new_records_in_this_run:
-                            logger.debug(f"Skipping duplicate in this run: {marker} - {repo.full_name}/{file.path}")
-                            continue  # Skip this result
-                        
-                        # Check if record already exists in database (more efficient than loading all records)
-                        existing = session.query(MarkerHit).filter(
-                            MarkerHit.marker == marker,
-                            MarkerHit.repo_name == repo.full_name,
-                            MarkerHit.file_path == file.path
-                        ).first()
-                        
-                        if existing:
-                            logger.debug(f"Skipping existing record: {marker} - {repo.full_name}/{file.path}")
+                        if result_key in existing_set or result_key in new_records_in_this_run:
+                            logger.debug(f"Skipping duplicate: {marker} - {repo.full_name}/{file.path}")
                             continue  # Skip this result
                         
                         # Extract contact information for the repository owner (optional)
@@ -621,8 +617,9 @@ class GitHubAPIScraper:
                         # Add to batch instead of immediate commit
                         records_to_commit.append(new_hit)
                         
-                        # Add to tracking set to prevent duplicates within this run
+                        # Add to tracking sets to prevent duplicates
                         new_records_in_this_run.add(result_key)
+                        existing_set.add(result_key)  # Update existing set for this run
                         
                         total_new_records += 1
                         processed_count += 1
@@ -634,6 +631,38 @@ class GitHubAPIScraper:
                                 session.commit()
                                 logger.info(f"Committed batch of {len(records_to_commit)} records")
                                 records_to_commit = []  # Clear the batch
+                            except IntegrityError as e:
+                                logger.warning(f"IntegrityError in batch commit (likely duplicate): {e}")
+                                session.rollback()
+                                # Try individual commits as fallback with better error handling
+                                successful_commits = 0
+                                for record in records_to_commit:
+                                    try:
+                                        # Double-check if record already exists before inserting
+                                        existing = session.query(MarkerHit).filter(
+                                            MarkerHit.marker == record.marker,
+                                            MarkerHit.repo_name == record.repo_name,
+                                            MarkerHit.file_path == record.file_path
+                                        ).first()
+                                        
+                                        if existing:
+                                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                            continue
+                                        
+                                        session.add(record)
+                                        session.commit()
+                                        successful_commits += 1
+                                    except IntegrityError as individual_error:
+                                        logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
+                                        session.rollback()
+                                        continue
+                                    except Exception as individual_error:
+                                        logger.error(f"Failed to commit individual record: {individual_error}")
+                                        session.rollback()
+                                        continue
+                                
+                                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
+                                records_to_commit = []
                             except Exception as e:
                                 logger.error(f"Error committing batch: {e}")
                                 session.rollback()
@@ -686,6 +715,37 @@ class GitHubAPIScraper:
                 session.add_all(records_to_commit)
                 session.commit()
                 logger.info(f"Committed final batch of {len(records_to_commit)} records")
+            except IntegrityError as e:
+                logger.warning(f"IntegrityError in final batch commit (likely duplicate): {e}")
+                session.rollback()
+                # Try individual commits as fallback with better error handling
+                successful_commits = 0
+                for record in records_to_commit:
+                    try:
+                        # Double-check if record already exists before inserting
+                        existing = session.query(MarkerHit).filter(
+                            MarkerHit.marker == record.marker,
+                            MarkerHit.repo_name == record.repo_name,
+                            MarkerHit.file_path == record.file_path
+                        ).first()
+                        
+                        if existing:
+                            logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                            continue
+                        
+                        session.add(record)
+                        session.commit()
+                        successful_commits += 1
+                    except IntegrityError as individual_error:
+                        logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
+                        session.rollback()
+                        continue
+                    except Exception as individual_error:
+                        logger.error(f"Failed to commit individual record: {individual_error}")
+                        session.rollback()
+                        continue
+                
+                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode")
             except Exception as e:
                 logger.error(f"Error committing final batch: {e}")
                 session.rollback()
