@@ -477,7 +477,8 @@ async def run_scraper(request: dict):
     try:
         github_token = request.get('github_token')
         backup_tokens = request.get('backup_tokens', [])  # List of backup tokens
-        extract_contacts = request.get('extract_contacts', True)
+        extract_contacts = request.get('extract_contacts', False)  # Default to False for speed
+        max_repos_per_pattern = request.get('max_repos_per_pattern', 20)  # Increased from default 10
         
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
@@ -495,8 +496,11 @@ async def run_scraper(request: dict):
         # Create scraper instance with token rotation support
         scraper = GitHubAPIScraper(github_token, backup_tokens)
         
-        # Run scraper
-        result = scraper.search_ai_code_generator_files_to_db(extract_contacts=extract_contacts)
+        # Run scraper with optimized parameters
+        result = scraper.search_ai_code_generator_files_to_db(
+            max_repos_per_pattern=max_repos_per_pattern,
+            extract_contacts=extract_contacts
+        )
         
         # Log token usage statistics
         if hasattr(scraper, 'rate_limit_errors') and scraper.rate_limit_errors:
@@ -641,6 +645,52 @@ async def test_github_token(request: dict):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Token test error: {str(e)}")
+
+@app.post("/api/run-scraper-fast")
+async def run_scraper_fast(request: dict):
+    """Run the scraper with high-throughput settings for maximum speed"""
+    try:
+        github_token = request.get('github_token')
+        backup_tokens = request.get('backup_tokens', [])  # List of backup tokens
+        
+        if not github_token:
+            raise HTTPException(status_code=400, detail="GitHub token is required")
+        
+        # Log token verification (first 8 chars only for security)
+        logging.info(f"Fast scraper initialized with primary GitHub token (first 8 chars: {github_token[:8]}...)")
+        if backup_tokens:
+            logging.info(f"Backup tokens available: {len(backup_tokens)}")
+            for i, token in enumerate(backup_tokens):
+                logging.info(f"Backup token {i+1} (first 8 chars: {token[:8]}...)")
+        
+        # Initialize database
+        init_database()
+        
+        # Create scraper instance with token rotation support
+        scraper = GitHubAPIScraper(github_token, backup_tokens)
+        
+        # Run scraper with high-throughput parameters
+        result = scraper.search_ai_code_generator_files_to_db(
+            max_repos_per_pattern=50,  # Much higher limit
+            extract_contacts=False,  # Skip contact extraction for speed
+            min_stars=0  # Include all repos regardless of stars
+        )
+        
+        # Log token usage statistics
+        if hasattr(scraper, 'rate_limit_errors') and scraper.rate_limit_errors:
+            logging.info(f"Rate limit errors by token: {scraper.rate_limit_errors}")
+        
+        return {
+            "status": "success",
+            "message": result.get("summary", f"Fast scraper completed successfully. Added {result.get('total_new_records', 0)} new records."),
+            "total_repos_found": result.get("total_repos_found", 0),
+            "new_records": result.get("total_new_records", 0),
+            "tokens_used": len(scraper.tokens) if hasattr(scraper, 'tokens') else 1,
+            "rate_limit_errors": scraper.rate_limit_errors if hasattr(scraper, 'rate_limit_errors') else {}
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fast scraper error: {str(e)}")
 
 @app.get("/")
 async def root():

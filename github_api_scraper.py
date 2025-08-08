@@ -225,20 +225,20 @@ class GitHubAPIScraper:
             else:
                 logger.info(f"Rate limit: {remaining}/{limit} remaining (unauthenticated)")
             
-            if remaining < 50:  # More conservative threshold
+            if remaining < 20:  # Less conservative threshold (was 50)
                 reset_time = rate_limit.core.reset.timestamp()
                 current_time = time.time()
                 sleep_time = max(reset_time - current_time, 60)
                 
                 logger.warning(f"Rate limit low ({remaining} remaining). Sleeping for {sleep_time:.0f} seconds...")
                 time.sleep(sleep_time)
-            elif remaining < 200:  # Add small delay when getting low
+            elif remaining < 100:  # Reduced threshold (was 200)
                 logger.info(f"Rate limit getting low ({remaining} remaining). Adding small delay...")
-                time.sleep(1)  # 1 second delay
+                time.sleep(0.5)  # Reduced delay (was 1 second)
         except Exception as e:
             logger.warning(f"Error checking rate limit: {e}")
             # If we can't check rate limit, add a conservative delay
-            time.sleep(2)
+            time.sleep(1)  # Reduced from 2 seconds
     
     def _make_api_call_with_retry(self, api_call_func, *args, **kwargs):
         """
@@ -507,7 +507,7 @@ class GitHubAPIScraper:
                 results[marker] = []
         return results
 
-    def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0, extract_contacts: bool = True) -> dict:
+    def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0, extract_contacts: bool = False) -> dict:
         """
         Search GitHub for repositories containing files that are markers for AI code generators
         and writes results directly to a SQLite database.
@@ -516,6 +516,7 @@ class GitHubAPIScraper:
         Args:
             max_repos_per_pattern: Maximum repositories to return per marker pattern.
             min_stars: Minimum number of stars for repositories to include.
+            extract_contacts: Whether to extract contact information (default: False for speed)
         """
         # List of AI code generator marker files to search for
         ai_markers = [
@@ -594,8 +595,10 @@ class GitHubAPIScraper:
                         else:
                             owner_contacts = {'email': None, 'source': 'none'}
                         
-                        # Get latest commit date for the repository
-                        latest_commit_date = self.get_latest_commit_date(repo.full_name)
+                        # Get latest commit date for the repository (only if extract_contacts is True)
+                        latest_commit_date = None
+                        if extract_contacts:
+                            latest_commit_date = self.get_latest_commit_date(repo.full_name)
                         
                         # Create new record without specifying ID (let database auto-increment)
                         new_hit = MarkerHit(
@@ -623,8 +626,8 @@ class GitHubAPIScraper:
                         
                         processed_count += 1
                         
-                        # Commit in batches of 10 to prevent session issues
-                        if len(records_to_commit) >= 10:
+                        # Commit in larger batches for better performance (increased from 10 to 25)
+                        if len(records_to_commit) >= 25:
                             try:
                                 session.add_all(records_to_commit)
                                 session.commit()
@@ -696,8 +699,8 @@ class GitHubAPIScraper:
                         
                         logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path} (contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
                         
-                        # Add delay to respect rate limits
-                        time.sleep(0.1)  # 100ms delay between requests
+                        # Reduced delay to respect rate limits (from 100ms to 50ms)
+                        time.sleep(0.05)  # 50ms delay between requests
                         
                     except Exception as e:
                         logger.warning(f"Error processing file hit for {marker}: {e}")
@@ -705,8 +708,8 @@ class GitHubAPIScraper:
                 
                 logger.info(f"Processed {processed_count} hits for marker {marker}")
                 
-                # Add delay between markers to respect rate limits
-                time.sleep(0.5)  # 500ms delay between markers
+                # Reduced delay between markers (from 500ms to 200ms)
+                time.sleep(0.2)  # 200ms delay between markers
                 
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
