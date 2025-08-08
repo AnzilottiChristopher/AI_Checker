@@ -9,7 +9,7 @@ import os
 import json
 from typing import Optional, List
 import sqlalchemy
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, func
 from sqlalchemy.orm import Session, sessionmaker
 import psycopg
 import sys
@@ -33,7 +33,7 @@ def run_with_timeout(func, timeout_seconds=300, *args, **kwargs):
     Default timeout is 5 minutes (300 seconds).
     """
     
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(func, *args, **kwargs)
         try:
             result = future.result(timeout=timeout_seconds)
@@ -538,7 +538,7 @@ async def run_scraper(request: dict):
                     extract_contacts=extract_contacts
                 )
             
-            result = run_with_timeout(run_scraper_operation, timeout_seconds=600)  # 10 minute timeout
+            result = run_with_timeout(run_scraper_operation, timeout_seconds=480)  # 8 minute timeout (reduced from 10)
         except Exception as e:
             logging.error(f"Scraper execution error: {e}")
             raise HTTPException(status_code=500, detail=f"Scraper execution failed: {str(e)}")
@@ -726,12 +726,12 @@ async def run_scraper_fast(request: dict):
         try:
             def run_fast_scraper_operation():
                 return scraper.search_ai_code_generator_files_to_db(
-                    max_repos_per_pattern=50,  # Much higher limit
+                    max_repos_per_pattern=100,  # Much higher limit for fast scraper
                     extract_contacts=False,  # Skip contact extraction for speed
                     min_stars=0  # Include all repos regardless of stars
                 )
             
-            result = run_with_timeout(run_fast_scraper_operation, timeout_seconds=900)  # 15 minute timeout for fast scraper
+            result = run_with_timeout(run_fast_scraper_operation, timeout_seconds=600)  # 10 minute timeout for fast scraper (reduced from 15)
         except Exception as e:
             logging.error(f"Fast scraper execution error: {e}")
             raise HTTPException(status_code=500, detail=f"Fast scraper execution failed: {str(e)}")
@@ -755,6 +755,37 @@ async def run_scraper_fast(request: dict):
     except Exception as e:
         logging.error(f"Unexpected error in run_scraper_fast: {e}")
         raise HTTPException(status_code=500, detail=f"Unexpected fast scraper error: {str(e)}")
+
+@app.get("/api/db-stats")
+async def get_database_stats(db: Session = Depends(get_db)):
+    """Get database statistics to understand data distribution"""
+    try:
+        # Get total count
+        total_records = db.query(MarkerHit).count()
+        
+        # Get count by marker
+        marker_counts = db.query(MarkerHit.marker, func.count(MarkerHit.id)).group_by(MarkerHit.marker).all()
+        
+        # Get count by owner type
+        owner_type_counts = db.query(MarkerHit.owner_type, func.count(MarkerHit.id)).group_by(MarkerHit.owner_type).all()
+        
+        # Get recent records (last 24 hours)
+        from datetime import datetime, timedelta
+        yesterday = datetime.utcnow() - timedelta(days=1)
+        recent_records = db.query(MarkerHit).filter(
+            MarkerHit.contact_extracted_at >= yesterday.isoformat()
+        ).count()
+        
+        return {
+            "total_records": total_records,
+            "marker_distribution": dict(marker_counts),
+            "owner_type_distribution": dict(owner_type_counts),
+            "recent_records_24h": recent_records,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting database stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Database stats error: {str(e)}")
 
 @app.get("/")
 async def root():

@@ -973,8 +973,11 @@
                             <button class="btn btn-outline" onclick="updateCommitDates()" id="updateCommitBtn">
                                 📅 Update Commit Dates
                             </button>
-                            <button class="btn btn-secondary" onclick="testGitHubToken()" id="testTokenBtn">
+                            <button class="btn btn-outline" onclick="testGitHubToken()" id="testTokenBtn">
                                 🔑 Test Token
+                            </button>
+                            <button class="btn btn-outline" onclick="getDatabaseStats()" id="dbStatsBtn">
+                                📊 Database Stats
                             </button>
                         </div>
                         
@@ -1569,26 +1572,24 @@
             const testTokenBtn = document.getElementById('testTokenBtn');
             const importResult = document.getElementById('importResult');
             
-            // Get GitHub token from input field or prompt
-            let githubToken = document.getElementById('githubToken').value;
-            if (!githubToken) {
-                githubToken = prompt('Enter your GitHub token to test:');
-                if (!githubToken) {
-                    showAlert('❌ GitHub token is required to test', 'error');
-                    return;
-                }
+            if (!serverOnline) {
+                showAlert('Server is offline. Please start the backend server.', 'error');
+                return;
             }
             
-            // Disable button and show progress
             testTokenBtn.disabled = true;
-            testTokenBtn.innerHTML = '⏳ Testing...';
+            testTokenBtn.innerHTML = '⏳ Testing Token...';
             
             try {
-                const requestBody = {
-                    github_token: githubToken
-                };
+                const requestBody = {};
                 
-                // Get backup tokens from input field
+                // Get primary token
+                const githubToken = document.getElementById('githubToken').value;
+                if (githubToken) {
+                    requestBody.github_token = githubToken;
+                }
+                
+                // Get backup tokens
                 const backupTokensText = document.getElementById('backupTokens').value;
                 if (backupTokensText.trim()) {
                     const backupTokens = backupTokensText.split('\n')
@@ -1598,7 +1599,7 @@
                         requestBody.backup_tokens = backupTokens;
                     }
                 }
-
+                
                 const response = await fetch(`${API_BASE}/test-github-token`, {
                     method: 'POST',
                     headers: {
@@ -1606,40 +1607,30 @@
                     },
                     body: JSON.stringify(requestBody)
                 });
-
+                
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.authenticated) {
-                        showAlert(`✅ ${data.message}`, 'success');
-                        
-                        // Show detailed results
-                        let resultHtml = `
-                            <div class="alert alert-success" style="margin-top: 1rem;">
-                                <h4>GitHub Token Test Results:</h4>
-                                <p><strong>Status:</strong> ✅ Authenticated</p>
-                                <p><strong>Rate Limit:</strong> ${data.rate_limit_remaining}/${data.rate_limit_total} remaining</p>
-                                <p><strong>Message:</strong> ${data.message}</p>
-                                <p><strong>Tokens Available:</strong> ${data.tokens_available || 1}</p>
-                        `;
-                        
-                        // Add backup token results if available
-                        if (data.backup_tokens_tested && data.backup_tokens_tested.length > 0) {
-                            resultHtml += `<p><strong>Backup Tokens Tested:</strong></p><ul>`;
-                            data.backup_tokens_tested.forEach(token => {
-                                if (token.status === 'working') {
-                                    resultHtml += `<li>✅ Token ${token.token_index}: ${token.rate_limit_remaining}/${token.rate_limit_total} remaining</li>`;
-                                } else {
-                                    resultHtml += `<li>❌ Token ${token.token_index}: ${token.error}</li>`;
-                                }
-                            });
-                            resultHtml += `</ul>`;
-                        }
-                        
-                        resultHtml += `</div>`;
-                        importResult.innerHTML = resultHtml;
-                    } else {
-                        showAlert(`❌ ${data.message}`, 'error');
+                    showAlert(`✅ ${data.message}`, 'success');
+                    
+                    // Show detailed results
+                    let resultHtml = `
+                        <div class="alert alert-success" style="margin-top: 1rem;">
+                            <h4>Token Test Results:</h4>
+                            <p><strong>Primary token:</strong> ${data.tokens_available ? '✅ Valid' : '❌ Invalid'}</p>
+                            <p><strong>Backup tokens tested:</strong> ${data.backup_tokens_tested || 0}</p>
+                            <p><strong>Rate limit remaining:</strong> ${data.rate_limit_remaining || 'Unknown'}</p>
+                    `;
+                    
+                    if (data.rate_limit_errors && Object.keys(data.rate_limit_errors).length > 0) {
+                        resultHtml += `<p><strong>Rate limit errors by token:</strong></p><ul>`;
+                        Object.entries(data.rate_limit_errors).forEach(([token, errors]) => {
+                            resultHtml += `<li>Token ${token.substring(0, 8)}...: ${errors} errors</li>`;
+                        });
+                        resultHtml += `</ul>`;
                     }
+                    
+                    resultHtml += `</div>`;
+                    importResult.innerHTML = resultHtml;
                 } else {
                     const error = await response.json();
                     showAlert(`❌ Token test failed: ${error.detail}`, 'error');
@@ -1647,7 +1638,7 @@
             } catch (error) {
                 showAlert(`❌ Token test failed: ${error.message}`, 'error');
             }
-
+            
             testTokenBtn.disabled = false;
             testTokenBtn.innerHTML = '🔑 Test Token';
         }
@@ -2151,6 +2142,64 @@
 
          // Auto-check server status every 30 seconds
          setInterval(checkServerStatus, 30000);
+
+         async function getDatabaseStats() {
+             const dbStatsBtn = document.getElementById('dbStatsBtn');
+             const importResult = document.getElementById('importResult');
+             
+             if (!serverOnline) {
+                 showAlert('Server is offline. Please start the backend server.', 'error');
+                 return;
+             }
+             
+             dbStatsBtn.disabled = true;
+             dbStatsBtn.innerHTML = '⏳ Loading Stats...';
+             
+             try {
+                 const response = await fetch(`${API_BASE}/db-stats`);
+                 
+                 if (response.ok) {
+                     const data = await response.json();
+                     showAlert(`✅ Database stats loaded`, 'success');
+                     
+                     // Show detailed results
+                     let resultHtml = `
+                         <div class="alert alert-info" style="margin-top: 1rem;">
+                             <h4>Database Statistics:</h4>
+                             <p><strong>Total records:</strong> ${data.total_records}</p>
+                             <p><strong>Recent records (24h):</strong> ${data.recent_records_24h}</p>
+                             <p><strong>Timestamp:</strong> ${data.timestamp}</p>
+                     `;
+                     
+                     if (data.marker_distribution && Object.keys(data.marker_distribution).length > 0) {
+                         resultHtml += `<p><strong>Records by marker:</strong></p><ul>`;
+                         Object.entries(data.marker_distribution).forEach(([marker, count]) => {
+                             resultHtml += `<li>${marker}: ${count} records</li>`;
+                         });
+                         resultHtml += `</ul>`;
+                     }
+                     
+                     if (data.owner_type_distribution && Object.keys(data.owner_type_distribution).length > 0) {
+                         resultHtml += `<p><strong>Records by owner type:</strong></p><ul>`;
+                         Object.entries(data.owner_type_distribution).forEach(([type, count]) => {
+                             resultHtml += `<li>${type}: ${count} records</li>`;
+                         });
+                         resultHtml += `</ul>`;
+                     }
+                     
+                     resultHtml += `</div>`;
+                     importResult.innerHTML = resultHtml;
+                 } else {
+                     const error = await response.json();
+                     showAlert(`❌ Failed to load database stats: ${error.detail}`, 'error');
+                 }
+             } catch (error) {
+                 showAlert(`❌ Failed to load database stats: ${error.message}`, 'error');
+             }
+             
+             dbStatsBtn.disabled = false;
+             dbStatsBtn.innerHTML = '📊 Database Stats';
+         }
     </script>
 </body>
 </html> 

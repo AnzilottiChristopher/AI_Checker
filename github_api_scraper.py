@@ -539,6 +539,7 @@ class GitHubAPIScraper:
         
         total_new_records = 0
         total_repos_found = 0
+        total_skipped = 0
         
         # Load existing records in chunks to prevent memory issues
         logger.info("Loading existing records for duplicate checking...")
@@ -550,6 +551,7 @@ class GitHubAPIScraper:
                 # Load in chunks to prevent memory issues
                 chunk_size = 1000
                 offset = 0
+                total_existing = 0
                 while True:
                     chunk = load_session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).offset(offset).limit(chunk_size).all()
                     if not chunk:
@@ -557,13 +559,14 @@ class GitHubAPIScraper:
                     
                     chunk_set = {(record[0], record[1], record[2]) for record in chunk}
                     existing_set.update(chunk_set)
+                    total_existing += len(chunk)
                     offset += chunk_size
                     
                     # Log progress for large datasets
                     if offset % 5000 == 0:
                         logger.info(f"Loaded {len(existing_set)} existing records so far...")
                 
-                logger.info(f"Loaded {len(existing_set)} existing records for duplicate checking")
+                logger.info(f"Loaded {len(existing_set)} existing records for duplicate checking (total records in DB: {total_existing})")
             except Exception as e:
                 logger.error(f"Error loading existing records: {e}")
                 # Continue with empty set if loading fails
@@ -589,6 +592,7 @@ class GitHubAPIScraper:
                 
                 processed_count = 0
                 records_to_commit = []  # Reset batch for each marker
+                skipped_count = 0
                 
                 for file in code_results:
                     # Limit processing per marker to avoid taking too long
@@ -602,8 +606,15 @@ class GitHubAPIScraper:
                         
                         # Check if this result already exists in database OR in this run
                         result_key = (marker, repo.full_name, file.path)
-                        if result_key in existing_set or result_key in new_records_in_this_run:
-                            logger.debug(f"Skipping duplicate: {marker} - {repo.full_name}/{file.path}")
+                        if result_key in existing_set:
+                            skipped_count += 1
+                            total_skipped += 1
+                            logger.debug(f"Skipping existing record: {marker} - {repo.full_name}/{file.path}")
+                            continue  # Skip this result
+                        elif result_key in new_records_in_this_run:
+                            skipped_count += 1
+                            total_skipped += 1
+                            logger.debug(f"Skipping duplicate from this run: {marker} - {repo.full_name}/{file.path}")
                             continue  # Skip this result
                         
                         # Extract contact information for the repository owner (optional)
@@ -797,7 +808,7 @@ class GitHubAPIScraper:
                         total_new_records += successful_commits
                         logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode for marker {marker}")
                 
-                logger.info(f"Processed {processed_count} hits for marker {marker}")
+                logger.info(f"Processed {processed_count} hits for marker {marker} (skipped {skipped_count} duplicates)")
                 
                 # Reduced delay between markers (from 500ms to 200ms)
                 time.sleep(0.2)  # 200ms delay between markers
@@ -807,6 +818,7 @@ class GitHubAPIScraper:
         
         logger.info(f"Total new records added: {total_new_records}")
         logger.info(f"Total repos found: {total_repos_found}")
+        logger.info(f"Total records skipped as duplicates: {total_skipped}")
         return {
             "total_new_records": total_new_records,
             "total_repos_found": total_repos_found,
