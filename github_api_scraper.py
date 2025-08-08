@@ -621,7 +621,6 @@ class GitHubAPIScraper:
                         new_records_in_this_run.add(result_key)
                         existing_set.add(result_key)  # Update existing set for this run
                         
-                        total_new_records += 1
                         processed_count += 1
                         
                         # Commit in batches of 10 to prevent session issues
@@ -629,6 +628,7 @@ class GitHubAPIScraper:
                             try:
                                 session.add_all(records_to_commit)
                                 session.commit()
+                                total_new_records += len(records_to_commit)
                                 logger.info(f"Committed batch of {len(records_to_commit)} records")
                                 records_to_commit = []  # Clear the batch
                             except IntegrityError as e:
@@ -661,6 +661,7 @@ class GitHubAPIScraper:
                                         session.rollback()
                                         continue
                                 
+                                total_new_records += successful_commits
                                 logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
                                 records_to_commit = []
                             except Exception as e:
@@ -689,6 +690,7 @@ class GitHubAPIScraper:
                                         session.rollback()
                                         continue
                                 
+                                total_new_records += successful_commits
                                 logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
                                 records_to_commit = []
                         
@@ -714,6 +716,7 @@ class GitHubAPIScraper:
             try:
                 session.add_all(records_to_commit)
                 session.commit()
+                total_new_records += len(records_to_commit)
                 logger.info(f"Committed final batch of {len(records_to_commit)} records")
             except IntegrityError as e:
                 logger.warning(f"IntegrityError in final batch commit (likely duplicate): {e}")
@@ -745,6 +748,7 @@ class GitHubAPIScraper:
                         session.rollback()
                         continue
                 
+                total_new_records += successful_commits
                 logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode")
             except Exception as e:
                 logger.error(f"Error committing final batch: {e}")
@@ -772,6 +776,7 @@ class GitHubAPIScraper:
                         session.rollback()
                         continue
                 
+                total_new_records += successful_commits
                 logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode")
         
         session.close()
