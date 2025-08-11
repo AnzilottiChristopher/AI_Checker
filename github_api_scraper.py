@@ -96,29 +96,50 @@ def migrate_database():
         logger.info("Starting database migration...")
         
         with SessionLocal() as session:
-            # Check if columns already exist
-            try:
-                session.execute(text("SELECT top_contributor FROM marker_hits LIMIT 1"))
-                session.execute(text("SELECT top_contributor_email FROM marker_hits LIMIT 1"))
-                logger.info("Columns already exist, migration not needed")
-                return True
-            except Exception:
-                logger.info("Columns don't exist, adding them...")
+            logger.info("Database session created successfully")
+            
+            # Use a separate connection to check if columns exist without affecting the main transaction
+            engine = session.get_bind()
+            with engine.connect() as connection:
+                # Check if columns already exist using information_schema
+                logger.info("Checking if columns exist using information_schema...")
+                result = connection.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'marker_hits' 
+                    AND column_name IN ('top_contributor', 'top_contributor_email')
+                """)).fetchall()
+                
+                existing_columns = [row[0] for row in result]
+                logger.info(f"Existing columns found: {existing_columns}")
+                
+                if 'top_contributor' in existing_columns and 'top_contributor_email' in existing_columns:
+                    logger.info("All columns already exist, migration not needed")
+                    return True
             
             # Add the new columns using raw SQL
+            logger.info("Adding top_contributor column...")
             session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor VARCHAR"))
-            session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor_email VARCHAR"))
-            session.commit()
+            logger.info("top_contributor column added")
             
-            logger.info("Database migration completed successfully")
+            logger.info("Adding top_contributor_email column...")
+            session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor_email VARCHAR"))
+            logger.info("top_contributor_email column added")
+            
+            logger.info("Committing changes...")
+            session.commit()
+            logger.info("Changes committed successfully")
             
             # Verify the new columns exist
+            logger.info("Verifying new columns...")
             result = session.execute(text("SELECT top_contributor, top_contributor_email FROM marker_hits LIMIT 1")).fetchall()
-            logger.info("New columns verified successfully")
+            logger.info(f"New columns verified successfully. Result: {result}")
             return True
             
     except Exception as e:
         logger.error(f"Error during database migration: {e}")
+        logger.error(f"Error type: {type(e)}")
+        logger.error(f"Error details: {str(e)}")
         return False
 
 @dataclass
