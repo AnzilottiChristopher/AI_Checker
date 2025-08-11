@@ -15,7 +15,7 @@ from urllib.parse import urljoin, urlparse
 from pathlib import Path
 from collections import Counter
 import sqlalchemy
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, func, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, func, UniqueConstraint, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import IntegrityError
@@ -94,15 +94,29 @@ def migrate_database():
     """Run database migration to add new columns. Safe to run multiple times."""
     try:
         logger.info("Starting database migration...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database migration completed successfully")
         
-        # Verify the new columns exist
         with SessionLocal() as session:
-            # Try to query the new columns to verify they exist
-            result = session.query(MarkerHit.top_contributor, MarkerHit.top_contributor_email).limit(1).all()
+            # Check if columns already exist
+            try:
+                session.execute(text("SELECT top_contributor FROM marker_hits LIMIT 1"))
+                session.execute(text("SELECT top_contributor_email FROM marker_hits LIMIT 1"))
+                logger.info("Columns already exist, migration not needed")
+                return True
+            except Exception:
+                logger.info("Columns don't exist, adding them...")
+            
+            # Add the new columns using raw SQL
+            session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor VARCHAR"))
+            session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor_email VARCHAR"))
+            session.commit()
+            
+            logger.info("Database migration completed successfully")
+            
+            # Verify the new columns exist
+            result = session.execute(text("SELECT top_contributor, top_contributor_email FROM marker_hits LIMIT 1")).fetchall()
             logger.info("New columns verified successfully")
             return True
+            
     except Exception as e:
         logger.error(f"Error during database migration: {e}")
         return False
