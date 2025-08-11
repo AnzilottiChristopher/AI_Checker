@@ -70,6 +70,9 @@ class MarkerHit(Base):
     contact_extracted_at = Column(String, default=lambda: datetime.utcnow().isoformat())
     # Repository activity fields
     latest_commit_date = Column(String)
+    # Top contributor fields
+    top_contributor = Column(String, index=True)
+    top_contributor_email = Column(String)
     
     # Add unique constraint to prevent duplicates
     __table_args__ = (
@@ -86,6 +89,23 @@ def init_database():
         logger.error(f"Error creating database tables: {e}")
         # Don't raise the exception - let the application continue
         pass
+
+def migrate_database():
+    """Run database migration to add new columns. Safe to run multiple times."""
+    try:
+        logger.info("Starting database migration...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database migration completed successfully")
+        
+        # Verify the new columns exist
+        with SessionLocal() as session:
+            # Try to query the new columns to verify they exist
+            result = session.query(MarkerHit.top_contributor, MarkerHit.top_contributor_email).limit(1).all()
+            logger.info("New columns verified successfully")
+            return True
+    except Exception as e:
+        logger.error(f"Error during database migration: {e}")
+        return False
 
 @dataclass
 class FileAnalysis:

@@ -407,7 +407,9 @@ async def get_hits(
                 "owner_email": hit.owner_email,
                 "contact_source": hit.contact_source,
                 "contact_extracted_at": str(hit.contact_extracted_at) if hit.contact_extracted_at else "",
-                "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else ""
+                "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else "",
+                "top_contributor": hit.top_contributor,
+                "top_contributor_email": hit.top_contributor_email
             })
         
         return {
@@ -485,7 +487,9 @@ async def get_top_repos(
                 "owner_email": hit.owner_email,
                 "contact_source": hit.contact_source,
                 "contact_extracted_at": str(hit.contact_extracted_at) if hit.contact_extracted_at else "",
-                "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else ""
+                "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else "",
+                "top_contributor": hit.top_contributor,
+                "top_contributor_email": hit.top_contributor_email
             })
         
         return {
@@ -830,3 +834,24 @@ async def debug_database():
         "has_supabase": "supabase.co" in database_url if database_url else False,
         "connection_test": "Try /api/health for connection test"
     }
+
+@app.post("/api/migrate-database")
+async def migrate_database_endpoint():
+    """Run database migration to add new columns"""
+    try:
+        from github_api_scraper import migrate_database
+        
+        success = migrate_database()
+        
+        if success:
+            return {
+                "status": "success",
+                "message": "Database migration completed successfully",
+                "new_columns": ["top_contributor", "top_contributor_email"]
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Database migration failed")
+            
+    except Exception as e:
+        logger.error(f"Migration endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration error: {str(e)}")
