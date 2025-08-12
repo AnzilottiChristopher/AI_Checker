@@ -1037,6 +1037,13 @@
                                         <option value="false">❌ No Email</option>
                                     </select>
                                 </div>
+                                <div class="filter-chip">
+                                    <select class="chip-select" id="hasTopContributorEmailFilter">
+                                        <option value="">👤 Filter by Top Contributor Email</option>
+                                        <option value="true">✅ Has Top Contributor Email</option>
+                                        <option value="false">❌ No Top Contributor Email</option>
+                                    </select>
+                                </div>
                                 
                                                                  <div class="filter-chip">
                                      <select class="chip-select" id="sortByFilter">
@@ -1768,6 +1775,7 @@
              const selectedMarkers = Array.from(document.querySelectorAll('#markerDropdown input[type="checkbox"]:checked:not(#selectAllMarkers)')).map(cb => cb.value);
              const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
              const hasEmailFilter = document.getElementById('hasEmailFilter').value;
+             const hasTopContributorEmailFilter = document.getElementById('hasTopContributorEmailFilter').value;
 
              const sortByFilter = document.getElementById('sortByFilter').value;
              const limitFilter = document.getElementById('limitFilter').value;
@@ -1789,6 +1797,7 @@
                  }
                  if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
                  if (hasEmailFilter) params.append('has_email', hasEmailFilter);
+                 if (hasTopContributorEmailFilter) params.append('has_top_contributor_email', hasTopContributorEmailFilter);
 
                  if (sortByFilter) params.append('sort_by', sortByFilter);
                  if (limitFilter) params.append('limit', limitFilter);
@@ -1901,6 +1910,8 @@
                                     <th>Stars</th>
                                     <th>Latest Commit</th>
                                     <th>Email</th>
+                                    <th>Top Contributor</th>
+                                    <th>Top Contributor Email</th>
                                     <th>Description</th>
                                 </tr>
                             </thead>
@@ -1915,6 +1926,9 @@
                 
                 // Format contact information
                 const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                
+                // Format top contributor information
+                const topContributorEmail = item.top_contributor_email ? `<a href="mailto:${item.top_contributor_email}" class="email-link">${item.top_contributor_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
                 
                 // Format commit date
                 const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
@@ -1933,6 +1947,8 @@
                         <td>⭐ ${item.stars || 0}</td>
                         <td>${commitDate}</td>
                         <td>${email}</td>
+                        <td>${item.top_contributor || 'N/A'}</td>
+                        <td>${topContributorEmail}</td>
                         <td>${item.description || 'N/A'}</td>
                     </tr>
                 `;
@@ -2021,7 +2037,7 @@
             }
 
             // Convert checked table rows to CSV
-            const csvRows = ['Marker,Repository,Owner,Stars,Latest Commit,Email,Description'];
+            const csvRows = ['Marker,Repository,Owner,Stars,Latest Commit,Email,Top Contributor,Top Contributor Email,Description'];
             
             checkedRows.forEach(row => {
                 const cells = row.querySelectorAll('td');
@@ -2033,7 +2049,10 @@
                 const commitDate = cells[5]?.textContent || 'N/A';
                 const emailElement = cells[6]?.querySelector('.email-link');
                 const email = emailElement?.textContent || 'N/A';
-                const description = cells[7]?.textContent || 'N/A';
+                const topContributor = cells[7]?.textContent || 'N/A';
+                const topContributorEmailElement = cells[8]?.querySelector('.email-link');
+                const topContributorEmail = topContributorEmailElement?.textContent || 'N/A';
+                const description = cells[9]?.textContent || 'N/A';
                 
                 // Mark this entry as exported
                 const entryId = `${marker}-${repoName}`;
@@ -2046,6 +2065,8 @@
                     stars,
                     commitDate,
                     email,
+                    topContributor,
+                    topContributorEmail,
                     description
                 ].map(field => `"${field.replace(/"/g, '""')}"`).join(',');
                 

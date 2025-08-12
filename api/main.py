@@ -284,6 +284,7 @@ async def get_hits(
     owner_type: Optional[str] = Query(None),  # Frontend sends 'owner_type'
     filter_owner_login: Optional[str] = Query(None),
     has_email: Optional[bool] = Query(None),
+    has_top_contributor_email: Optional[bool] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Get hits with filtering, sorting, and pagination"""
@@ -313,6 +314,11 @@ async def get_hits(
                 query = query.filter(MarkerHit.owner_email.isnot(None), MarkerHit.owner_email != "")
             else:
                 query = query.filter((MarkerHit.owner_email.is_(None)) | (MarkerHit.owner_email == ""))
+        if has_top_contributor_email is not None:
+            if has_top_contributor_email:
+                query = query.filter(MarkerHit.top_contributor_email.isnot(None), MarkerHit.top_contributor_email != "")
+            else:
+                query = query.filter((MarkerHit.top_contributor_email.is_(None)) | (MarkerHit.top_contributor_email == ""))
         
         # Apply sorting - handle frontend's combined sort parameters
         if sort_by:
@@ -958,6 +964,7 @@ async def get_unique_repos(
     owner_type: Optional[str] = Query(None),
     filter_owner_login: Optional[str] = Query(None),
     has_email: Optional[bool] = Query(None),
+    has_top_contributor_email: Optional[bool] = Query(None),
     db: Session = Depends(get_db)
 ):
     """Get unique repositories with AI markers (one entry per repo, not per file)"""
@@ -1004,6 +1011,11 @@ async def get_unique_repos(
                 query = query.filter(MarkerHit.owner_email.isnot(None), MarkerHit.owner_email != "")
             else:
                 query = query.filter((MarkerHit.owner_email.is_(None)) | (MarkerHit.owner_email == ""))
+        if has_top_contributor_email is not None:
+            if has_top_contributor_email:
+                query = query.filter(MarkerHit.top_contributor_email.isnot(None), MarkerHit.top_contributor_email != "")
+            else:
+                query = query.filter((MarkerHit.top_contributor_email.is_(None)) | (MarkerHit.top_contributor_email == ""))
         
         # Apply sorting
         if sort_by:
