@@ -20,8 +20,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class TopContributorPopulator:
-    def __init__(self):
-        self.scraper = GitHubAPIScraper()
+    def __init__(self, github_token=None, backup_tokens=None):
+        if github_token:
+            self.scraper = GitHubAPIScraper(github_token, backup_tokens or [])
+        else:
+            # Try to get token from environment variable
+            import os
+            env_token = os.getenv('GITHUB_TOKEN')
+            if env_token:
+                self.scraper = GitHubAPIScraper(env_token)
+            else:
+                raise ValueError("GitHub token is required. Either pass it to the constructor or set GITHUB_TOKEN environment variable.")
         self.session = SessionLocal()
         
     def get_top_contributor(self, repo_name: str) -> Optional[Tuple[str, str]]:

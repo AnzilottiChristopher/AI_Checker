@@ -857,12 +857,19 @@ async def migrate_database_endpoint():
         raise HTTPException(status_code=500, detail=f"Migration error: {str(e)}")
 
 @app.post("/api/populate-top-contributors")
-async def populate_top_contributors_endpoint(limit: int = None):
+async def populate_top_contributors_endpoint(request: dict):
     """Populate top contributor data for existing repositories"""
     try:
         from populate_top_contributors import TopContributorPopulator
         
-        populator = TopContributorPopulator()
+        github_token = request.get('github_token')
+        backup_tokens = request.get('backup_tokens', [])
+        limit = request.get('limit')
+        
+        if not github_token:
+            raise HTTPException(status_code=400, detail="GitHub token is required")
+        
+        populator = TopContributorPopulator(github_token, backup_tokens)
         populator.populate_top_contributors(limit)
         
         return {
