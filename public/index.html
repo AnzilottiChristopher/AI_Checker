@@ -2038,7 +2038,7 @@
                             </button>
                             <div id="showMoreSelectAll" style="display: none; margin-top: 0.5rem;">
                                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
-                                    <input type="checkbox" id="selectAllOther" checked style="width: auto;">
+                                    <input type="checkbox" id="selectAllOther" style="width: auto;">
                                     Select All Other Entries
                                 </label>
                             </div>
@@ -2068,7 +2068,7 @@
                     tableHTML += `
                         <tr class="${exportedClass} other-entry" style="display: none;">
                             <td style="text-align: center;">
-                                <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
+                                <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" style="width: auto;">
                             </td>
                             <td><span class="marker-badge">${item.marker}</span></td>
                             <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
