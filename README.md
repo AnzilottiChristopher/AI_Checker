@@ -26,6 +26,23 @@ A FastAPI-based web application that scrapes GitHub repositories for AI code gen
 - `GET /api/contact-stats` - Get contact statistics
 - `GET /api/hits` - Get hits with filtering, sorting, pagination
 - `POST /api/run-scraper` - Run the scraper
+- `POST /api/run-scraper-fast` - Run the scraper with high-throughput settings
+
+## Scraper Behavior
+
+The scraper is designed to find a specific number of **new unique repositories** per marker pattern:
+
+- **Default**: 10 new repositories per marker pattern
+- **Fast mode**: 50 new repositories per marker pattern
+- **Customizable**: You can specify `max_repos_per_pattern` in the API request
+
+The scraper will:
+1. Search GitHub for repositories containing AI code generator markers
+2. Skip repositories that already exist in the database
+3. Continue searching until it finds exactly the requested number of NEW repositories
+4. Stop once the target is reached, even if more repositories are available
+
+This ensures efficient scraping by focusing only on new, unique data.
 
 ## Local Development
 

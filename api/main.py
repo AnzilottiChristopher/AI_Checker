@@ -716,7 +716,7 @@ async def run_scraper(request: dict):
         github_token = request.get('github_token')
         backup_tokens = request.get('backup_tokens', [])  # List of backup tokens
         extract_contacts = request.get('extract_contacts', False)  # Default to False for speed
-        max_repos_per_pattern = request.get('max_repos_per_pattern', 20)  # Increased from default 10
+        max_repos_per_pattern = request.get('max_repos_per_pattern', 10)  # Default to 10 new repos per marker
         
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
@@ -762,7 +762,8 @@ async def run_scraper(request: dict):
         return {
             "status": "success",
             "message": result.get("summary", f"Scraper completed successfully. Added {result.get('total_new_records', 0)} new records."),
-            "total_repos_found": result.get("total_repos_found", 0),
+            "total_repos_found": result.get("total_new_records", 0),
+            "total_repos_checked": result.get("total_repos_checked", 0),
             "new_records": result.get("total_new_records", 0),
             "tokens_used": len(scraper.tokens) if hasattr(scraper, 'tokens') else 1,
             "rate_limit_errors": scraper.rate_limit_errors if hasattr(scraper, 'rate_limit_errors') else {}
@@ -938,7 +939,7 @@ async def run_scraper_fast(request: dict):
         try:
             def run_fast_scraper_operation():
                 return scraper.search_ai_code_generator_files_to_db(
-                    max_repos_per_pattern=100,  # Much higher limit for fast scraper
+                    max_repos_per_pattern=50,  # Find 50 new repos per marker for fast scraper
                     extract_contacts=False,  # Skip contact extraction for speed
                     min_stars=0  # Include all repos regardless of stars
                 )
@@ -955,7 +956,8 @@ async def run_scraper_fast(request: dict):
         return {
             "status": "success",
             "message": result.get("summary", f"Fast scraper completed successfully. Added {result.get('total_new_records', 0)} new records."),
-            "total_repos_found": result.get("total_repos_found", 0),
+            "total_repos_found": result.get("total_new_records", 0),
+            "total_repos_checked": result.get("total_repos_checked", 0),
             "new_records": result.get("total_new_records", 0),
             "tokens_used": len(scraper.tokens) if hasattr(scraper, 'tokens') else 1,
             "rate_limit_errors": scraper.rate_limit_errors if hasattr(scraper, 'rate_limit_errors') else {}

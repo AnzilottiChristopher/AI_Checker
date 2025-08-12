@@ -571,7 +571,9 @@ class GitHubAPIScraper:
         Skips existing results to get new data points.
 
         Args:
-            max_repos_per_pattern: Maximum repositories to return per marker pattern.
+            max_repos_per_pattern: Maximum NEW repositories to return per marker pattern.
+                                  The scraper will continue searching until it finds exactly
+                                  this many NEW repositories (not already in the database).
             min_stars: Minimum number of stars for repositories to include.
             extract_contacts: Whether to extract contact information (default: False for speed)
         """
@@ -639,14 +641,18 @@ class GitHubAPIScraper:
                 skipped_count = 0
                 
                 for file in code_results:
-                    # Limit processing per marker to avoid taking too long
+                    # Check if we've already found enough NEW repositories for this marker
                     if processed_count >= max_repos_per_pattern:
-                        logger.info(f"Reached limit of {max_repos_per_pattern} repos for marker {marker}")
+                        logger.info(f"Found {max_repos_per_pattern} new repos for marker {marker}, stopping search")
                         break
                         
                     try:
                         repo = file.repository
                         total_repos_found += 1
+                        
+                        # Log progress every 50 repositories checked
+                        if total_repos_found % 50 == 0:
+                            logger.info(f"Checked {total_repos_found} total repos, found {total_new_records} new ones so far")
                         
                         # Check if this repository already exists in database OR in this run
                         repo_name = repo.full_name
@@ -654,12 +660,12 @@ class GitHubAPIScraper:
                             skipped_count += 1
                             total_skipped += 1
                             logger.debug(f"Skipping existing repository: {repo_name}")
-                            continue  # Skip this repository
+                            continue  # Skip this repository and continue searching
                         elif repo_name in new_repos_in_this_run:
                             skipped_count += 1
                             total_skipped += 1
                             logger.debug(f"Skipping duplicate repository from this run: {repo_name}")
-                            continue  # Skip this repository
+                            continue  # Skip this repository and continue searching
                         
                         # Extract contact information for the repository owner (optional)
                         if extract_contacts:
@@ -855,9 +861,11 @@ class GitHubAPIScraper:
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
         
-        logger.info(f"Total new records added: {total_new_records}")
-        logger.info(f"Total repos found: {total_repos_found}")
-        logger.info(f"Total records skipped as duplicates: {total_skipped}")
+        logger.info(f"=== SCRAPING SUMMARY ===")
+        logger.info(f"Total repositories checked: {total_repos_found}")
+        logger.info(f"New unique repositories found: {total_new_records}")
+        logger.info(f"Repositories skipped (already in DB): {total_skipped}")
+        logger.info(f"Success rate: {total_new_records/(total_repos_found+total_skipped)*100:.1f}% new repos found")
         
         # Auto-populate top contributors for new repositories
         if new_repositories_found and total_new_records > 0:
@@ -871,8 +879,9 @@ class GitHubAPIScraper:
         return {
             "total_new_records": total_new_records,
             "total_repos_found": total_repos_found,
+            "total_repos_checked": total_repos_found + total_skipped,
             "new_repositories_found": len(new_repositories_found),
-            "summary": f"Found {total_repos_found} repositories, added {total_new_records} new records"
+            "summary": f"Checked {total_repos_found + total_skipped} repositories, found {total_new_records} new unique ones"
         }
 
     def extract_contact_info(self, username: str) -> Dict[str, Optional[str]]:
