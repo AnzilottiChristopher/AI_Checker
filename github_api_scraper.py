@@ -589,8 +589,8 @@ class GitHubAPIScraper:
             '.aicode',
         ]
         
-        # Track new records added in this run to prevent duplicates within the same run
-        new_records_in_this_run = set()
+        # Track new repositories found in this run to prevent duplicates within the same run
+        new_repos_in_this_run = set()
         
         # Track new repositories found for auto-population of top contributors
         new_repositories_found = set()
@@ -599,36 +599,22 @@ class GitHubAPIScraper:
         total_repos_found = 0
         total_skipped = 0
         
-        # Load existing records in chunks to prevent memory issues
-        logger.info("Loading existing records for duplicate checking...")
-        existing_set = set()
+        # Load existing repositories for duplicate checking
+        logger.info("Loading existing repositories for duplicate checking...")
+        existing_repos = set()
         
-        # Use a separate session for loading existing records
+        # Use a separate session for loading existing repositories
         with SessionLocal() as load_session:
             try:
-                # Load in chunks to prevent memory issues
-                chunk_size = 1000
-                offset = 0
-                total_existing = 0
-                while True:
-                    chunk = load_session.query(MarkerHit.marker, MarkerHit.repo_name, MarkerHit.file_path).offset(offset).limit(chunk_size).all()
-                    if not chunk:
-                        break
-                    
-                    chunk_set = {(record[0], record[1], record[2]) for record in chunk}
-                    existing_set.update(chunk_set)
-                    total_existing += len(chunk)
-                    offset += chunk_size
-                    
-                    # Log progress for large datasets
-                    if offset % 5000 == 0:
-                        logger.info(f"Loaded {len(existing_set)} existing records so far...")
+                # Load all existing repository names (distinct)
+                existing_repos_list = load_session.query(MarkerHit.repo_name).distinct().all()
+                existing_repos = {repo[0] for repo in existing_repos_list}
                 
-                logger.info(f"Loaded {len(existing_set)} existing records for duplicate checking (total records in DB: {total_existing})")
+                logger.info(f"Loaded {len(existing_repos)} existing repositories for duplicate checking")
             except Exception as e:
-                logger.error(f"Error loading existing records: {e}")
+                logger.error(f"Error loading existing repositories: {e}")
                 # Continue with empty set if loading fails
-                existing_set = set()
+                existing_repos = set()
         
         for marker in ai_markers:
             # Build the search query for the file path
@@ -662,18 +648,18 @@ class GitHubAPIScraper:
                         repo = file.repository
                         total_repos_found += 1
                         
-                        # Check if this result already exists in database OR in this run
-                        result_key = (marker, repo.full_name, file.path)
-                        if result_key in existing_set:
+                        # Check if this repository already exists in database OR in this run
+                        repo_name = repo.full_name
+                        if repo_name in existing_repos:
                             skipped_count += 1
                             total_skipped += 1
-                            logger.debug(f"Skipping existing record: {marker} - {repo.full_name}/{file.path}")
-                            continue  # Skip this result
-                        elif result_key in new_records_in_this_run:
+                            logger.debug(f"Skipping existing repository: {repo_name}")
+                            continue  # Skip this repository
+                        elif repo_name in new_repos_in_this_run:
                             skipped_count += 1
                             total_skipped += 1
-                            logger.debug(f"Skipping duplicate from this run: {marker} - {repo.full_name}/{file.path}")
-                            continue  # Skip this result
+                            logger.debug(f"Skipping duplicate repository from this run: {repo_name}")
+                            continue  # Skip this repository
                         
                         # Extract contact information for the repository owner (optional)
                         if extract_contacts:
@@ -713,11 +699,11 @@ class GitHubAPIScraper:
                         records_to_commit.append(new_hit)
                         
                         # Add to tracking sets to prevent duplicates
-                        new_records_in_this_run.add(result_key)
-                        existing_set.add(result_key)  # Update existing set for this run
+                        new_repos_in_this_run.add(repo_name)
+                        existing_repos.add(repo_name)  # Update existing set for this run
                         
                         # Track new repository for auto-population
-                        new_repositories_found.add(repo.full_name)
+                        new_repositories_found.add(repo_name)
                         
                         processed_count += 1
                         
@@ -737,15 +723,13 @@ class GitHubAPIScraper:
                                 with SessionLocal() as fallback_session:
                                     for record in records_to_commit:
                                         try:
-                                            # Double-check if record already exists before inserting
+                                            # Double-check if repository already exists before inserting
                                             existing = fallback_session.query(MarkerHit).filter(
-                                                MarkerHit.marker == record.marker,
-                                                MarkerHit.repo_name == record.repo_name,
-                                                MarkerHit.file_path == record.file_path
+                                                MarkerHit.repo_name == record.repo_name
                                             ).first()
                                             
                                             if existing:
-                                                logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                                logger.debug(f"Repository already exists, skipping: {record.repo_name}")
                                                 continue
                                             
                                             fallback_session.add(record)
@@ -769,15 +753,13 @@ class GitHubAPIScraper:
                                 with SessionLocal() as fallback_session:
                                     for record in records_to_commit:
                                         try:
-                                            # Double-check if record already exists before inserting
+                                            # Double-check if repository already exists before inserting
                                             existing = fallback_session.query(MarkerHit).filter(
-                                                MarkerHit.marker == record.marker,
-                                                MarkerHit.repo_name == record.repo_name,
-                                                MarkerHit.file_path == record.file_path
+                                                MarkerHit.repo_name == record.repo_name
                                             ).first()
                                             
                                             if existing:
-                                                logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                                logger.debug(f"Repository already exists, skipping: {record.repo_name}")
                                                 continue
                                             
                                             fallback_session.add(record)
@@ -793,7 +775,7 @@ class GitHubAPIScraper:
                             
                             records_to_commit = []  # Clear the batch
                         
-                        logger.info(f"Added new hit to DB: {marker} - {repo.full_name}/{file.path} (contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
+                        logger.info(f"Added new repository to DB: {marker} - {repo_name} (file: {file.path}, contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
                         
                         # Reduced delay to respect rate limits (from 100ms to 50ms)
                         time.sleep(0.05)  # 50ms delay between requests
@@ -818,13 +800,11 @@ class GitHubAPIScraper:
                             for record in records_to_commit:
                                 try:
                                     existing = fallback_session.query(MarkerHit).filter(
-                                        MarkerHit.marker == record.marker,
-                                        MarkerHit.repo_name == record.repo_name,
-                                        MarkerHit.file_path == record.file_path
+                                        MarkerHit.repo_name == record.repo_name
                                     ).first()
                                     
                                     if existing:
-                                        logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                        logger.debug(f"Repository already exists, skipping: {record.repo_name}")
                                         continue
                                     
                                     fallback_session.add(record)
@@ -849,13 +829,11 @@ class GitHubAPIScraper:
                             for record in records_to_commit:
                                 try:
                                     existing = fallback_session.query(MarkerHit).filter(
-                                        MarkerHit.marker == record.marker,
-                                        MarkerHit.repo_name == record.repo_name,
-                                        MarkerHit.file_path == record.file_path
+                                        MarkerHit.repo_name == record.repo_name
                                     ).first()
                                     
                                     if existing:
-                                        logger.debug(f"Record already exists, skipping: {record.marker} - {record.repo_name}/{record.file_path}")
+                                        logger.debug(f"Repository already exists, skipping: {record.repo_name}")
                                         continue
                                     
                                     fallback_session.add(record)
