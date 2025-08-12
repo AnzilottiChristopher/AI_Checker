@@ -945,3 +945,152 @@ async def check_duplicates_endpoint(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error checking duplicates: {e}")
         raise HTTPException(status_code=500, detail=f"Error checking duplicates: {str(e)}")
+
+@app.get("/api/unique-repos")
+async def get_unique_repos(
+    limit: Optional[str] = Query(None),
+    offset: int = Query(0, ge=0),
+    sort_by: str = Query("stars"),
+    sort_order: str = Query("desc"),
+    filter_marker: Optional[str] = Query(None),
+    marker: Optional[str] = Query(None),
+    filter_owner_type: Optional[str] = Query(None),
+    owner_type: Optional[str] = Query(None),
+    filter_owner_login: Optional[str] = Query(None),
+    has_email: Optional[bool] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get unique repositories with AI markers (one entry per repo, not per file)"""
+    try:
+        from sqlalchemy import func, distinct
+        
+        # Start with base query for unique repositories
+        query = db.query(
+            MarkerHit.repo_name,
+            MarkerHit.owner_type,
+            MarkerHit.owner_login,
+            MarkerHit.repo_url,
+            MarkerHit.stars,
+            MarkerHit.description,
+            MarkerHit.owner_email,
+            MarkerHit.contact_source,
+            MarkerHit.contact_extracted_at,
+            MarkerHit.latest_commit_date,
+            MarkerHit.top_contributor,
+            MarkerHit.top_contributor_email,
+            func.count(MarkerHit.id).label('file_count'),
+            func.string_agg(MarkerHit.marker, ', ').label('all_markers')
+        ).group_by(
+            MarkerHit.repo_name,
+            MarkerHit.owner_type,
+            MarkerHit.owner_login,
+            MarkerHit.repo_url,
+            MarkerHit.stars,
+            MarkerHit.description,
+            MarkerHit.owner_email,
+            MarkerHit.contact_source,
+            MarkerHit.contact_extracted_at,
+            MarkerHit.latest_commit_date,
+            MarkerHit.top_contributor,
+            MarkerHit.top_contributor_email
+        )
+        
+        # Apply filters
+        marker_filter = filter_marker or marker
+        if marker_filter:
+            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
+            if markers:
+                from sqlalchemy import or_
+                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
+                query = query.having(or_(*marker_conditions))
+        
+        owner_type_filter = filter_owner_type or owner_type
+        if owner_type_filter:
+            query = query.filter(MarkerHit.owner_type == owner_type_filter)
+        
+        if filter_owner_login:
+            query = query.filter(MarkerHit.owner_login.contains(filter_owner_login))
+        
+        if has_email is not None:
+            if has_email:
+                query = query.filter(MarkerHit.owner_email.isnot(None), MarkerHit.owner_email != "")
+            else:
+                query = query.filter((MarkerHit.owner_email.is_(None)) | (MarkerHit.owner_email == ""))
+        
+        # Apply sorting
+        if sort_by:
+            sort_mapping = {
+                "stars_desc": ("stars", "desc"),
+                "stars_asc": ("stars", "asc"),
+                "commit_desc": ("latest_commit_date", "desc"),
+                "commit_asc": ("latest_commit_date", "asc"),
+                "name_desc": ("repo_name", "desc"),
+                "name_asc": ("repo_name", "asc"),
+                "files_desc": ("file_count", "desc"),
+                "files_asc": ("file_count", "asc")
+            }
+            
+            if sort_by in sort_mapping:
+                column_name, order = sort_mapping[sort_by]
+                if column_name == "file_count":
+                    sort_column = func.count(MarkerHit.id)
+                else:
+                    sort_column = getattr(MarkerHit, column_name)
+                
+                if order.upper() == "DESC":
+                    query = query.order_by(sort_column.desc())
+                else:
+                    query = query.order_by(sort_column.asc())
+            else:
+                # Fallback to direct column sorting
+                if hasattr(MarkerHit, sort_by):
+                    sort_column = getattr(MarkerHit, sort_by)
+                    if sort_order.upper() == "DESC":
+                        query = query.order_by(sort_column.desc())
+                    else:
+                        query = query.order_by(sort_column.asc())
+        
+        # Apply pagination
+        query = query.offset(offset)
+        
+        # Handle limit
+        if limit and limit.strip() and limit != "":
+            try:
+                limit_int = int(limit)
+                if limit_int > 0:
+                    query = query.limit(limit_int)
+            except ValueError:
+                pass
+        
+        # Execute query
+        repos = query.all()
+        
+        # Convert to list of dictionaries
+        result = []
+        for repo in repos:
+            result.append({
+                "repo_name": repo.repo_name,
+                "owner_type": repo.owner_type,
+                "owner_login": repo.owner_login,
+                "repo_url": repo.repo_url,
+                "stars": repo.stars,
+                "description": repo.description or "",
+                "owner_email": repo.owner_email,
+                "contact_source": repo.contact_source,
+                "contact_extracted_at": str(repo.contact_extracted_at) if repo.contact_extracted_at else "",
+                "latest_commit_date": str(repo.latest_commit_date) if repo.latest_commit_date else "",
+                "top_contributor": repo.top_contributor,
+                "top_contributor_email": repo.top_contributor_email,
+                "file_count": repo.file_count,
+                "all_markers": repo.all_markers
+            })
+        
+        return {
+            "repos": result,
+            "total": len(result),
+            "limit": limit if limit and limit.strip() else "all",
+            "offset": offset
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
