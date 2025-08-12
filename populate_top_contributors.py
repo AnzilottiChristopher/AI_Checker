@@ -46,40 +46,30 @@ class TopContributorPopulator:
                 
             owner, repo = repo_name.split('/', 1)
             
-            # Get contributors for the repository
-            contributors_url = f"https://api.github.com/repos/{owner}/{repo}/contributors"
-            headers = self.scraper.get_headers()
-            
-            response = requests.get(contributors_url, headers=headers)
-            
-            if response.status_code == 404:
-                logger.warning(f"Repository not found: {repo_name}")
-                return None
-            elif response.status_code != 200:
-                logger.warning(f"Failed to get contributors for {repo_name}: {response.status_code}")
+            # Get contributors for the repository using GitHub API
+            try:
+                contributors = self.scraper.github.get_repo(f"{owner}/{repo}").get_contributors()
+                contributors_list = list(contributors)
+            except Exception as e:
+                logger.warning(f"Failed to get contributors for {repo_name}: {e}")
                 return None
                 
-            contributors = response.json()
-            
-            if not contributors:
+            if not contributors_list:
                 logger.info(f"No contributors found for {repo_name}")
                 return None
                 
             # Get the top contributor (first in the list)
-            top_contributor = contributors[0]
-            username = top_contributor.get('login')
+            top_contributor = contributors_list[0]
+            username = top_contributor.login
             
             if not username:
                 logger.warning(f"No username found for top contributor in {repo_name}")
                 return None
                 
             # Get the user's profile to extract email
-            user_url = f"https://api.github.com/users/{username}"
-            user_response = requests.get(user_url, headers=headers)
-            
-            if user_response.status_code == 200:
-                user_data = user_response.json()
-                email = user_data.get('email')
+            try:
+                user = self.scraper.github.get_user(username)
+                email = user.email
                 
                 if email:
                     logger.info(f"Found top contributor for {repo_name}: {username} ({email})")
@@ -87,8 +77,8 @@ class TopContributorPopulator:
                 else:
                     logger.info(f"Found top contributor for {repo_name}: {username} (no email)")
                     return username, None
-            else:
-                logger.warning(f"Failed to get user profile for {username}: {user_response.status_code}")
+            except Exception as e:
+                logger.warning(f"Failed to get user profile for {username}: {e}")
                 return username, None
                 
         except Exception as e:
