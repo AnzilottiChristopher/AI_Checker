@@ -592,6 +592,9 @@ class GitHubAPIScraper:
         # Track new records added in this run to prevent duplicates within the same run
         new_records_in_this_run = set()
         
+        # Track new repositories found for auto-population of top contributors
+        new_repositories_found = set()
+        
         total_new_records = 0
         total_repos_found = 0
         total_skipped = 0
@@ -712,6 +715,9 @@ class GitHubAPIScraper:
                         # Add to tracking sets to prevent duplicates
                         new_records_in_this_run.add(result_key)
                         existing_set.add(result_key)  # Update existing set for this run
+                        
+                        # Track new repository for auto-population
+                        new_repositories_found.add(repo.full_name)
                         
                         processed_count += 1
                         
@@ -874,9 +880,20 @@ class GitHubAPIScraper:
         logger.info(f"Total new records added: {total_new_records}")
         logger.info(f"Total repos found: {total_repos_found}")
         logger.info(f"Total records skipped as duplicates: {total_skipped}")
+        
+        # Auto-populate top contributors for new repositories
+        if new_repositories_found and total_new_records > 0:
+            logger.info(f"Auto-populating top contributors for {len(new_repositories_found)} new repositories...")
+            try:
+                self.auto_populate_top_contributors_for_new_repos(new_repositories_found)
+            except Exception as e:
+                logger.error(f"Error auto-populating top contributors: {e}")
+                # Don't fail the entire scraping process if auto-population fails
+        
         return {
             "total_new_records": total_new_records,
             "total_repos_found": total_repos_found,
+            "new_repositories_found": len(new_repositories_found),
             "summary": f"Found {total_repos_found} repositories, added {total_new_records} new records"
         }
 
@@ -1097,6 +1114,104 @@ class GitHubAPIScraper:
             return {"error": str(e), "database_type": database_type}
         finally:
             session.close()
+
+    def auto_populate_top_contributors_for_new_repos(self, new_repositories: set):
+        """
+        Auto-populate top contributor data for newly scraped repositories.
+        
+        Args:
+            new_repositories: Set of repository names (owner/repo) to populate
+        """
+        if not new_repositories:
+            logger.info("No new repositories to populate top contributors for")
+            return
+        
+        logger.info(f"Starting auto-population of top contributors for {len(new_repositories)} new repositories...")
+        
+        populated_count = 0
+        error_count = 0
+        
+        for repo_name in new_repositories:
+            try:
+                # Extract owner and repo from full name (e.g., "owner/repo")
+                if '/' not in repo_name:
+                    logger.warning(f"Invalid repo name format: {repo_name}")
+                    continue
+                    
+                owner, repo = repo_name.split('/', 1)
+                
+                # Get contributors for the repository using GitHub API
+                try:
+                    self.check_rate_limit()
+                    contributors = self.github.get_repo(f"{owner}/{repo}").get_contributors()
+                    contributors_list = list(contributors)
+                except Exception as e:
+                    logger.warning(f"Failed to get contributors for {repo_name}: {e}")
+                    error_count += 1
+                    continue
+                    
+                if not contributors_list:
+                    logger.info(f"No contributors found for {repo_name}")
+                    continue
+                    
+                # Get the top contributor (first in the list)
+                top_contributor = contributors_list[0]
+                username = top_contributor.login
+                
+                if not username:
+                    logger.warning(f"No username found for top contributor in {repo_name}")
+                    continue
+                    
+                # Get the user's profile to extract email
+                try:
+                    self.check_rate_limit()
+                    user = self.github.get_user(username)
+                    email = user.email
+                    
+                    # Update all records for this repository with top contributor info
+                    with SessionLocal() as session:
+                        records = session.query(MarkerHit).filter(MarkerHit.repo_name == repo_name).all()
+                        
+                        for record in records:
+                            record.top_contributor = username
+                            record.top_contributor_email = email
+                        
+                        session.commit()
+                        populated_count += 1
+                        
+                        if email:
+                            logger.info(f"Updated {len(records)} records for {repo_name}: {username} ({email})")
+                        else:
+                            logger.info(f"Updated {len(records)} records for {repo_name}: {username} (no email)")
+                            
+                except Exception as e:
+                    logger.warning(f"Failed to get user profile for {username}: {e}")
+                    # Still update with username even if email fails
+                    try:
+                        with SessionLocal() as session:
+                            records = session.query(MarkerHit).filter(MarkerHit.repo_name == repo_name).all()
+                            
+                            for record in records:
+                                record.top_contributor = username
+                                record.top_contributor_email = None
+                            
+                            session.commit()
+                            populated_count += 1
+                            logger.info(f"Updated {len(records)} records for {repo_name}: {username} (no email)")
+                    except Exception as db_error:
+                        logger.error(f"Failed to update database for {repo_name}: {db_error}")
+                        error_count += 1
+                        continue
+                
+                # Add delay to respect rate limits
+                time.sleep(0.1)  # 100ms delay between requests
+                
+            except Exception as e:
+                logger.error(f"Error processing top contributor for {repo_name}: {e}")
+                error_count += 1
+                continue
+        
+        logger.info(f"Auto-population complete: {populated_count} repositories updated, {error_count} errors")
 
 class APICodeParser:
     """
