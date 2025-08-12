@@ -2208,13 +2208,13 @@
             }
 
             // Convert checked table rows to CSV
-            const csvRows = ['Marker,Repository,Owner,Stars,Latest Commit,Top Contributor,Top Contributor Email,Email,Description'];
+            const csvRows = ['Marker,Repository URL,Owner,Stars,Latest Commit,Top Contributor,Top Contributor Email,Email,Description'];
             
             checkedRows.forEach(row => {
                 const cells = row.querySelectorAll('td');
                 const marker = cells[1]?.querySelector('.marker-badge')?.textContent || 'N/A';
                 const repoLink = cells[2]?.querySelector('.repo-link');
-                const repoName = repoLink?.textContent || 'N/A';
+                const repoUrl = repoLink?.href || 'N/A';
                 const owner = cells[3]?.textContent || 'N/A';
                 const stars = cells[4]?.textContent.replace('⭐ ', '') || 'N/A';
                 const commitDate = cells[5]?.textContent || 'N/A';
@@ -2226,12 +2226,12 @@
                 const description = cells[9]?.textContent || 'N/A';
                 
                 // Mark this entry as exported
-                const entryId = `${marker}-${repoName}`;
+                const entryId = `${marker}-${repoUrl}`;
                 addExportedEntry(entryId);
                 
                 const rowData = [
                     marker,
-                    repoName,
+                    repoUrl,
                     owner,
                     stars,
                     commitDate,

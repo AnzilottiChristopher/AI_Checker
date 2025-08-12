@@ -239,36 +239,47 @@ class CSVCriteriaOrganizer:
                 if 'readme' in str(i).lower() or 'content' in str(i).lower():
                     readme_content = cell
         
-        # Try to fetch additional data from GitHub if repository name is available
-        repo_name = row[1] if len(row) > 1 else ""  # Repository name is in column B (index 1)
-        repo_url = ""
+        # Try to fetch additional data from GitHub if repository URL is available
+        repo_url = row[1] if len(row) > 1 else ""  # Repository URL is in column B (index 1)
+        repo_name = ""
         
-        if repo_name and '/' in repo_name:
-            repo_url = f"https://github.com/{repo_name}"
+        # Extract repo name from URL if needed
+        if repo_url and 'github.com' in repo_url:
+            # Extract owner/repo from URL like https://github.com/owner/repo
+            parts = repo_url.rstrip('/').split('/')
+            if len(parts) >= 2:
+                repo_name = f"{parts[-2]}/{parts[-1]}"
             print(f"  Fetching data from: {repo_url}")
             repo_data = self.fetch_repo_data(repo_url)
         else:
-            repo_data = {}
-            
-            # Use HTML-parsed data if available, otherwise fall back to CSV data
-            if repo_data.get('description'):
-                description = repo_data['description']
-                print(f"  Found description from GitHub: {description[:100]}...")
-            
-            if repo_data.get('readme_content'):
-                readme_content = repo_data['readme_content']
-                print(f"  Found README content from GitHub: {len(readme_content)} characters")
-            
-            # Check for website links in parsed data
-            if repo_data.get('website_links'):
+            # Fallback: try to construct URL from repo name if URL is not provided
+            repo_name = row[1] if len(row) > 1 else ""
+            if repo_name and '/' in repo_name:
+                repo_url = f"https://github.com/{repo_name}"
+                print(f"  Fetching data from: {repo_url}")
+                repo_data = self.fetch_repo_data(repo_url)
+            else:
+                repo_data = {}
+        
+        # Use HTML-parsed data if available, otherwise fall back to CSV data
+        if repo_data.get('description'):
+            description = repo_data['description']
+            print(f"  Found description from GitHub: {description[:100]}...")
+        
+        if repo_data.get('readme_content'):
+            readme_content = repo_data['readme_content']
+            print(f"  Found README content from GitHub: {len(readme_content)} characters")
+        
+        # Check for website links in parsed data
+        if repo_data.get('website_links'):
+            score += 1
+            print(f"  +1: Website link found in repository ({len(repo_data['website_links'])} links)")
+        
+        # Check last commit date from parsed data
+        if repo_data.get('last_commit'):
+            if self.is_active_last_90_days(repo_data['last_commit']):
                 score += 1
-                print(f"  +1: Website link found in repository ({len(repo_data['website_links'])} links)")
-            
-            # Check last commit date from parsed data
-            if repo_data.get('last_commit'):
-                if self.is_active_last_90_days(repo_data['last_commit']):
-                    score += 1
-                    print(f"  +1: Active in last 90 days (last commit: {repo_data['last_commit']})")
+                print(f"  +1: Active in last 90 days (last commit: {repo_data['last_commit']})")
         
         # Website link in description (if not already found from HTML)
         if not repo_url or not repo_data.get('website_links'):
