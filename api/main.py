@@ -307,7 +307,7 @@ async def get_hits(
             func.max(MarkerHit.top_contributor).label('top_contributor'),
             func.max(MarkerHit.top_contributor_email).label('top_contributor_email'),
             func.count(MarkerHit.id).label('file_count'),
-            func.string_agg(MarkerHit.marker, ', ').label('all_markers')
+            func.string_agg(func.distinct(MarkerHit.marker), ', ').label('all_markers')
         ).group_by(MarkerHit.repo_name)
         
         # Apply filters
@@ -634,7 +634,7 @@ async def get_top_repos(
             func.max(MarkerHit.top_contributor).label('top_contributor'),
             func.max(MarkerHit.top_contributor_email).label('top_contributor_email'),
             func.count(MarkerHit.id).label('file_count'),
-            func.string_agg(MarkerHit.marker, ', ').label('all_markers')
+            func.string_agg(func.distinct(MarkerHit.marker), ', ').label('all_markers')
         ).group_by(MarkerHit.repo_name)
         
         # Apply filters
@@ -1182,7 +1182,7 @@ async def get_unique_repos(
             func.max(MarkerHit.top_contributor).label('top_contributor'),
             func.max(MarkerHit.top_contributor_email).label('top_contributor_email'),
             func.count(MarkerHit.id).label('file_count'),
-            func.string_agg(MarkerHit.marker, ', ').label('all_markers')
+            func.string_agg(func.distinct(MarkerHit.marker), ', ').label('all_markers')
         ).group_by(MarkerHit.repo_name)
         
         # Apply filters
