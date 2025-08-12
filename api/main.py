@@ -866,22 +866,12 @@ async def migrate_database_endpoint():
 async def populate_top_contributors_endpoint(request: dict):
     """Populate top contributor data for existing repositories"""
     try:
-        from populate_top_contributors import TopContributorPopulator
-        
-        github_token = request.get('github_token')
-        backup_tokens = request.get('backup_tokens', [])
-        limit = request.get('limit')
-        
-        if not github_token:
-            raise HTTPException(status_code=400, detail="GitHub token is required")
-        
-        populator = TopContributorPopulator(github_token, backup_tokens)
-        populator.populate_top_contributors(limit)
-        
+        # This endpoint is deprecated - top contributor population is now handled automatically
+        # during the main scraping process for new repositories
         return {
-            "status": "success",
-            "message": "Top contributor population completed successfully",
-            "limit": limit
+            "status": "deprecated",
+            "message": "This endpoint is deprecated. Top contributor population is now handled automatically during scraping.",
+            "note": "Use the main scraping endpoint to populate top contributors for new repositories"
         }
     except Exception as e:
         logger.error(f"Top contributor population error: {e}")

@@ -1948,9 +1948,9 @@
                                     <th>Owner</th>
                                     <th>Stars</th>
                                     <th>Latest Commit</th>
-                                    <th>Email</th>
                                     <th>Top Contributor</th>
                                     <th>Top Contributor Email</th>
+                                    <th>Email</th>
                                     <th>Description</th>
                                 </tr>
                             </thead>
@@ -1976,22 +1976,22 @@
                 // Format owner info
                 const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
                 
-                tableHTML += `
-                    <tr class="${exportedClass} prioritized-entry">
-                        <td style="text-align: center;">
-                            <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
-                        </td>
-                        <td><span class="marker-badge">${item.marker}</span></td>
-                        <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
-                        <td>${ownerInfo}</td>
-                        <td>⭐ ${item.stars || 0}</td>
-                        <td>${commitDate}</td>
-                        <td>${email}</td>
-                        <td>${item.top_contributor || 'N/A'}</td>
-                        <td>${topContributorEmail}</td>
-                        <td>${item.description || 'N/A'}</td>
-                    </tr>
-                `;
+                                    tableHTML += `
+                        <tr class="${exportedClass} prioritized-entry">
+                            <td style="text-align: center;">
+                                <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
+                            </td>
+                            <td><span class="marker-badge">${item.marker}</span></td>
+                            <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
+                            <td>${ownerInfo}</td>
+                            <td>⭐ ${item.stars || 0}</td>
+                            <td>${commitDate}</td>
+                            <td>${item.top_contributor || 'N/A'}</td>
+                            <td>${topContributorEmail}</td>
+                            <td>${email}</td>
+                            <td>${item.description || 'N/A'}</td>
+                        </tr>
+                    `;
             });
 
             // Add show more section if there are other entries
@@ -2041,9 +2041,9 @@
                             <td>${ownerInfo}</td>
                             <td>⭐ ${item.stars || 0}</td>
                             <td>${commitDate}</td>
-                            <td>${email}</td>
                             <td>${item.top_contributor || 'N/A'}</td>
                             <td>${topContributorEmail}</td>
+                            <td>${email}</td>
                             <td>${item.description || 'N/A'}</td>
                         </tr>
                     `;
@@ -2174,7 +2174,7 @@
             }
 
             // Convert checked table rows to CSV
-            const csvRows = ['Marker,Repository,Owner,Stars,Latest Commit,Email,Top Contributor,Top Contributor Email,Description'];
+            const csvRows = ['Marker,Repository,Owner,Stars,Latest Commit,Top Contributor,Top Contributor Email,Email,Description'];
             
             checkedRows.forEach(row => {
                 const cells = row.querySelectorAll('td');
@@ -2184,11 +2184,11 @@
                 const owner = cells[3]?.textContent || 'N/A';
                 const stars = cells[4]?.textContent.replace('⭐ ', '') || 'N/A';
                 const commitDate = cells[5]?.textContent || 'N/A';
-                const emailElement = cells[6]?.querySelector('.email-link');
-                const email = emailElement?.textContent || 'N/A';
-                const topContributor = cells[7]?.textContent || 'N/A';
-                const topContributorEmailElement = cells[8]?.querySelector('.email-link');
+                const topContributor = cells[6]?.textContent || 'N/A';
+                const topContributorEmailElement = cells[7]?.querySelector('.email-link');
                 const topContributorEmail = topContributorEmailElement?.textContent || 'N/A';
+                const emailElement = cells[8]?.querySelector('.email-link');
+                const email = emailElement?.textContent || 'N/A';
                 const description = cells[9]?.textContent || 'N/A';
                 
                 // Mark this entry as exported
@@ -2201,9 +2201,9 @@
                     owner,
                     stars,
                     commitDate,
-                    email,
                     topContributor,
                     topContributorEmail,
+                    email,
                     description
                 ].map(field => `"${field.replace(/"/g, '""')}"`).join(',');
                 
