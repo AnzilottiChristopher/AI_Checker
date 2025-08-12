@@ -2002,6 +2002,12 @@
                             <button id="showMoreBtn" class="btn btn-secondary" style="width: 200px;">
                                 Show ${otherData.length} More Entries
                             </button>
+                            <div id="showMoreSelectAll" style="display: none; margin-top: 0.5rem;">
+                                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                                    <input type="checkbox" id="selectAllOther" checked style="width: auto;">
+                                    Select All Other Entries
+                                </label>
+                            </div>
                         </td>
                     </tr>
                 `;
@@ -2063,28 +2069,66 @@
         // Setup checkbox handlers for select all functionality
         function setupCheckboxHandlers() {
             const selectAllCheckbox = document.getElementById('selectAll');
+            const selectAllOtherCheckbox = document.getElementById('selectAllOther');
             const exportCheckboxes = document.querySelectorAll('.export-checkbox');
             
+            // Main "Select All" checkbox - only affects prioritized entries (currently shown)
             if (selectAllCheckbox) {
                 selectAllCheckbox.addEventListener('change', function() {
-                    exportCheckboxes.forEach(checkbox => {
+                    const prioritizedCheckboxes = document.querySelectorAll('.prioritized-entry .export-checkbox');
+                    prioritizedCheckboxes.forEach(checkbox => {
                         checkbox.checked = this.checked;
                     });
+                    updateMainSelectAllState();
                 });
             }
             
-            // Update select all checkbox when individual checkboxes change
+            // "Select All Other" checkbox - only affects other entries (hidden by default)
+            if (selectAllOtherCheckbox) {
+                selectAllOtherCheckbox.addEventListener('change', function() {
+                    const otherCheckboxes = document.querySelectorAll('.other-entry .export-checkbox');
+                    otherCheckboxes.forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                    });
+                    updateOtherSelectAllState();
+                });
+            }
+            
+            // Update checkboxes when individual checkboxes change
             exportCheckboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', function() {
-                    const allChecked = Array.from(exportCheckboxes).every(cb => cb.checked);
-                    const anyChecked = Array.from(exportCheckboxes).some(cb => cb.checked);
-                    
-                    if (selectAllCheckbox) {
-                        selectAllCheckbox.checked = allChecked;
-                        selectAllCheckbox.indeterminate = anyChecked && !allChecked;
-                    }
+                    updateMainSelectAllState();
+                    updateOtherSelectAllState();
                 });
             });
+        }
+        
+        // Update main "Select All" checkbox state based on prioritized entries
+        function updateMainSelectAllState() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const prioritizedCheckboxes = document.querySelectorAll('.prioritized-entry .export-checkbox');
+            
+            if (selectAllCheckbox && prioritizedCheckboxes.length > 0) {
+                const allChecked = Array.from(prioritizedCheckboxes).every(cb => cb.checked);
+                const anyChecked = Array.from(prioritizedCheckboxes).some(cb => cb.checked);
+                
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = anyChecked && !allChecked;
+            }
+        }
+        
+        // Update "Select All Other" checkbox state based on other entries
+        function updateOtherSelectAllState() {
+            const selectAllOtherCheckbox = document.getElementById('selectAllOther');
+            const otherCheckboxes = document.querySelectorAll('.other-entry .export-checkbox');
+            
+            if (selectAllOtherCheckbox && otherCheckboxes.length > 0) {
+                const allChecked = Array.from(otherCheckboxes).every(cb => cb.checked);
+                const anyChecked = Array.from(otherCheckboxes).some(cb => cb.checked);
+                
+                selectAllOtherCheckbox.checked = allChecked;
+                selectAllOtherCheckbox.indeterminate = anyChecked && !allChecked;
+            }
         }
 
 
@@ -2322,6 +2366,7 @@
                 showMoreBtn.addEventListener('click', function() {
                     const otherEntries = document.querySelectorAll('.other-entry');
                     const showMoreHeader = document.querySelector('.show-more-header');
+                    const showMoreSelectAll = document.getElementById('showMoreSelectAll');
                     
                     if (otherEntries.length > 0) {
                         const isHidden = otherEntries[0].style.display === 'none';
@@ -2333,6 +2378,11 @@
                             });
                             showMoreBtn.textContent = 'Hide Entries';
                             showMoreHeader.style.background = 'hsl(var(--success) / 0.1)';
+                            
+                            // Show the "Select All Other" checkbox
+                            if (showMoreSelectAll) {
+                                showMoreSelectAll.style.display = 'block';
+                            }
                         } else {
                             // Hide entries
                             otherEntries.forEach(entry => {
@@ -2340,6 +2390,11 @@
                             });
                             showMoreBtn.textContent = `Show ${otherEntries.length} More Entries`;
                             showMoreHeader.style.background = 'hsl(var(--card-secondary))';
+                            
+                            // Hide the "Select All Other" checkbox
+                            if (showMoreSelectAll) {
+                                showMoreSelectAll.style.display = 'none';
+                            }
                         }
                     }
                 });
