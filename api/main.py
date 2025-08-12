@@ -291,10 +291,20 @@ async def get_hits(
     try:
         from sqlalchemy import func, distinct
         
-        # Start with base query for unique repositories
-        # Group by repo_name only to get one entry per repository
-        query = db.query(
-            MarkerHit.repo_name,
+        # Start with base query
+        query = db.query(MarkerHit.repo_name)
+        
+        # Apply marker filters first (before grouping)
+        marker_filter = filter_marker or marker
+        if marker_filter:
+            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
+            if markers:
+                from sqlalchemy import or_
+                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
+                query = query.filter(or_(*marker_conditions))
+        
+        # Now group the filtered results
+        query = query.add_columns(
             func.max(MarkerHit.owner_type).label('owner_type'),
             func.max(MarkerHit.owner_login).label('owner_login'),
             func.max(MarkerHit.repo_url).label('repo_url'),
@@ -309,15 +319,6 @@ async def get_hits(
             func.count(MarkerHit.id).label('file_count'),
             func.string_agg(func.distinct(MarkerHit.marker), ', ').label('all_markers')
         ).group_by(MarkerHit.repo_name)
-        
-        # Apply filters
-        marker_filter = filter_marker or marker
-        if marker_filter:
-            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
-            if markers:
-                from sqlalchemy import or_
-                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
-                query = query.having(or_(*marker_conditions))
         
         owner_type_filter = filter_owner_type or owner_type
         if owner_type_filter:
@@ -619,9 +620,20 @@ async def get_top_repos(
     try:
         from sqlalchemy import func
         
-        # Start with base query for unique repositories
-        query = db.query(
-            MarkerHit.repo_name,
+        # Start with base query
+        query = db.query(MarkerHit.repo_name)
+        
+        # Apply marker filters first (before grouping)
+        marker_filter = filter_marker or marker
+        if marker_filter:
+            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
+            if markers:
+                from sqlalchemy import or_
+                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
+                query = query.filter(or_(*marker_conditions))
+        
+        # Now group the filtered results
+        query = query.add_columns(
             func.max(MarkerHit.owner_type).label('owner_type'),
             func.max(MarkerHit.owner_login).label('owner_login'),
             func.max(MarkerHit.repo_url).label('repo_url'),
@@ -636,15 +648,6 @@ async def get_top_repos(
             func.count(MarkerHit.id).label('file_count'),
             func.string_agg(func.distinct(MarkerHit.marker), ', ').label('all_markers')
         ).group_by(MarkerHit.repo_name)
-        
-        # Apply filters
-        marker_filter = filter_marker or marker
-        if marker_filter:
-            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
-            if markers:
-                from sqlalchemy import or_
-                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
-                query = query.having(or_(*marker_conditions))
         
         owner_type_filter = filter_owner_type or owner_type
         if owner_type_filter:
@@ -1166,10 +1169,20 @@ async def get_unique_repos(
     try:
         from sqlalchemy import func, distinct
         
-        # Start with base query for unique repositories
-        # Group by repo_name only to get one entry per repository
-        query = db.query(
-            MarkerHit.repo_name,
+        # Start with base query
+        query = db.query(MarkerHit.repo_name)
+        
+        # Apply marker filters first (before grouping)
+        marker_filter = filter_marker or marker
+        if marker_filter:
+            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
+            if markers:
+                from sqlalchemy import or_
+                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
+                query = query.filter(or_(*marker_conditions))
+        
+        # Now group the filtered results
+        query = query.add_columns(
             func.max(MarkerHit.owner_type).label('owner_type'),
             func.max(MarkerHit.owner_login).label('owner_login'),
             func.max(MarkerHit.repo_url).label('repo_url'),
@@ -1184,15 +1197,6 @@ async def get_unique_repos(
             func.count(MarkerHit.id).label('file_count'),
             func.string_agg(func.distinct(MarkerHit.marker), ', ').label('all_markers')
         ).group_by(MarkerHit.repo_name)
-        
-        # Apply filters
-        marker_filter = filter_marker or marker
-        if marker_filter:
-            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
-            if markers:
-                from sqlalchemy import or_
-                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
-                query = query.having(or_(*marker_conditions))
         
         owner_type_filter = filter_owner_type or owner_type
         if owner_type_filter:
