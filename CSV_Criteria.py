@@ -216,9 +216,9 @@ class CSVCriteriaOrganizer:
         """
         score = 0
         
-        # Ensure we have enough columns (A through R = 18 columns)
-        if len(row) < 18:
-            print(f"Warning: Row has only {len(row)} columns, expected 18")
+        # Handle both 18-column and 9-column structures
+        if len(row) < 9:
+            print(f"Warning: Row has only {len(row)} columns, minimum 9 required")
             return score
         
         # Professional email (column H - actual email column)
@@ -318,31 +318,24 @@ class CSVCriteriaOrganizer:
         
         # Calculate scores for all rows (skip header)
         header = self.data[0]
-        
-        # Update header for column R to indicate it contains the score
-        if len(header) >= 18:
-            header[17] = "Score"  # Column R header
-        else:
-            # Extend header to 18 columns if needed
-            while len(header) < 18:
-                header.append("")
-            header[17] = "Score"
-        
         data_rows = self.data[1:]
+        
+        # Always use column 17 (index 17) for score, regardless of structure
+        # Extend header to 18 columns if needed
+        while len(header) < 18:
+            header.append("")
+        header[17] = "Score"
         
         scored_rows = []
         for i, row in enumerate(data_rows, start=2):  # Start at 2 since we skipped header
             print(f"\nRow {i}:")
             score = self.calculate_score(row)
             
-            # Add score to column R (last column)
-            if len(row) >= 18:
-                row[17] = str(score)  # Column R is index 17
-            else:
-                # Extend row to 18 columns if needed
-                while len(row) < 18:
-                    row.append("")
-                row[17] = str(score)
+            # Always use column 17 (index 17) for score, regardless of structure
+            # Extend row to 18 columns if needed
+            while len(row) < 18:
+                row.append("")
+            row[17] = str(score)
             
             scored_rows.append((score, row))
             print(f"  Total score: {score}")
