@@ -93,9 +93,9 @@ class TopContributorPopulator:
             limit: Optional limit on number of repositories to process
         """
         try:
-            # Query repositories that don't have top contributor data yet
+            # Query repositories that don't have top contributor data yet or have 'none' (from previous failed runs)
             query = self.session.query(MarkerHit).filter(
-                MarkerHit.top_contributor.is_(None)
+                (MarkerHit.top_contributor.is_(None)) | (MarkerHit.top_contributor == 'none')
             ).distinct(MarkerHit.repo_name)
             
             if limit:
