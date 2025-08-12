@@ -72,3 +72,6 @@ test_*.py
 
 # Local development
 local_*
+
+# CSV
+*.csv
