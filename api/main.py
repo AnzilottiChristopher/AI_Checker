@@ -965,35 +965,23 @@ async def get_unique_repos(
         from sqlalchemy import func, distinct
         
         # Start with base query for unique repositories
+        # Group by repo_name only to get one entry per repository
         query = db.query(
             MarkerHit.repo_name,
-            MarkerHit.owner_type,
-            MarkerHit.owner_login,
-            MarkerHit.repo_url,
-            MarkerHit.stars,
-            MarkerHit.description,
-            MarkerHit.owner_email,
-            MarkerHit.contact_source,
-            MarkerHit.contact_extracted_at,
-            MarkerHit.latest_commit_date,
-            MarkerHit.top_contributor,
-            MarkerHit.top_contributor_email,
+            func.max(MarkerHit.owner_type).label('owner_type'),
+            func.max(MarkerHit.owner_login).label('owner_login'),
+            func.max(MarkerHit.repo_url).label('repo_url'),
+            func.max(MarkerHit.stars).label('stars'),
+            func.max(MarkerHit.description).label('description'),
+            func.max(MarkerHit.owner_email).label('owner_email'),
+            func.max(MarkerHit.contact_source).label('contact_source'),
+            func.max(MarkerHit.contact_extracted_at).label('contact_extracted_at'),
+            func.max(MarkerHit.latest_commit_date).label('latest_commit_date'),
+            func.max(MarkerHit.top_contributor).label('top_contributor'),
+            func.max(MarkerHit.top_contributor_email).label('top_contributor_email'),
             func.count(MarkerHit.id).label('file_count'),
             func.string_agg(MarkerHit.marker, ', ').label('all_markers')
-        ).group_by(
-            MarkerHit.repo_name,
-            MarkerHit.owner_type,
-            MarkerHit.owner_login,
-            MarkerHit.repo_url,
-            MarkerHit.stars,
-            MarkerHit.description,
-            MarkerHit.owner_email,
-            MarkerHit.contact_source,
-            MarkerHit.contact_extracted_at,
-            MarkerHit.latest_commit_date,
-            MarkerHit.top_contributor,
-            MarkerHit.top_contributor_email
-        )
+        ).group_by(MarkerHit.repo_name)
         
         # Apply filters
         marker_filter = filter_marker or marker
