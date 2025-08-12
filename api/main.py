@@ -287,33 +287,51 @@ async def get_hits(
     has_top_contributor_email: Optional[bool] = Query(None),
     db: Session = Depends(get_db)
 ):
-    """Get hits with filtering, sorting, and pagination"""
+    """Get unique repositories with AI markers (one entry per repo, not per file)"""
     try:
-        # Start with base query
-        query = db.query(MarkerHit)
+        from sqlalchemy import func, distinct
+        
+        # Start with base query for unique repositories
+        # Group by repo_name only to get one entry per repository
+        query = db.query(
+            MarkerHit.repo_name,
+            func.max(MarkerHit.owner_type).label('owner_type'),
+            func.max(MarkerHit.owner_login).label('owner_login'),
+            func.max(MarkerHit.repo_url).label('repo_url'),
+            func.max(MarkerHit.stars).label('stars'),
+            func.max(MarkerHit.description).label('description'),
+            func.max(MarkerHit.owner_email).label('owner_email'),
+            func.max(MarkerHit.contact_source).label('contact_source'),
+            func.max(MarkerHit.contact_extracted_at).label('contact_extracted_at'),
+            func.max(MarkerHit.latest_commit_date).label('latest_commit_date'),
+            func.max(MarkerHit.top_contributor).label('top_contributor'),
+            func.max(MarkerHit.top_contributor_email).label('top_contributor_email'),
+            func.count(MarkerHit.id).label('file_count'),
+            func.string_agg(MarkerHit.marker, ', ').label('all_markers')
+        ).group_by(MarkerHit.repo_name)
         
         # Apply filters
-        # Handle marker filter (frontend sends 'marker', backend expects 'filter_marker')
         marker_filter = filter_marker or marker
         if marker_filter:
-            # Split by comma to handle multiple markers
             markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
             if markers:
-                # Create OR condition for multiple markers
                 from sqlalchemy import or_
                 marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
-                query = query.filter(or_(*marker_conditions))
-        # Handle owner_type filter (frontend sends 'owner_type', backend expects 'filter_owner_type')
+                query = query.having(or_(*marker_conditions))
+        
         owner_type_filter = filter_owner_type or owner_type
         if owner_type_filter:
             query = query.filter(MarkerHit.owner_type == owner_type_filter)
+        
         if filter_owner_login:
             query = query.filter(MarkerHit.owner_login.contains(filter_owner_login))
+        
         if has_email is not None:
             if has_email:
                 query = query.filter(MarkerHit.owner_email.isnot(None), MarkerHit.owner_email != "")
             else:
                 query = query.filter((MarkerHit.owner_email.is_(None)) | (MarkerHit.owner_email == ""))
+        
         if has_top_contributor_email is not None:
             if has_top_contributor_email:
                 query = query.filter(MarkerHit.top_contributor_email.isnot(None), MarkerHit.top_contributor_email != "")
@@ -330,6 +348,174 @@ async def get_hits(
                 "commit_asc": ("latest_commit_date", "asc"),
                 "name_desc": ("repo_name", "desc"),
                 "name_asc": ("repo_name", "asc"),
+                "id": ("file_count", "desc")  # Use file_count as proxy for id sorting
+            }
+            
+            if sort_by in sort_mapping:
+                column_name, order = sort_mapping[sort_by]
+                
+                # Special handling for commit date sorting to put "N/A" values at the bottom
+                if column_name == "latest_commit_date":
+                    if order.upper() == "DESC":
+                        from sqlalchemy import case, desc, asc
+                        query = query.order_by(
+                            case(
+                                (func.max(MarkerHit.latest_commit_date).is_(None), 0),
+                                (func.max(MarkerHit.latest_commit_date) == "", 0),
+                                (func.max(MarkerHit.latest_commit_date) == "N/A", 0),
+                                else_=1
+                            ).desc(),
+                            func.max(MarkerHit.latest_commit_date).desc()
+                        )
+                    else:
+                        from sqlalchemy import case, desc, asc
+                        query = query.order_by(
+                            case(
+                                (func.max(MarkerHit.latest_commit_date).is_(None), 0),
+                                (func.max(MarkerHit.latest_commit_date) == "", 0),
+                                (func.max(MarkerHit.latest_commit_date) == "N/A", 0),
+                                else_=1
+                            ).desc(),
+                            func.max(MarkerHit.latest_commit_date).asc()
+                        )
+                else:
+                    # Regular sorting for other columns
+                    if column_name == "stars":
+                        sort_column = func.max(MarkerHit.stars)
+                    elif column_name == "repo_name":
+                        sort_column = MarkerHit.repo_name
+                    elif column_name == "file_count":
+                        sort_column = func.count(MarkerHit.id)
+                    else:
+                        sort_column = func.max(getattr(MarkerHit, column_name))
+                    
+                    if order.upper() == "DESC":
+                        query = query.order_by(sort_column.desc())
+                    else:
+                        query = query.order_by(sort_column.asc())
+            else:
+                # Fallback to direct column sorting
+                if hasattr(MarkerHit, sort_by):
+                    sort_column = func.max(getattr(MarkerHit, sort_by))
+                    if sort_order.upper() == "DESC":
+                        query = query.order_by(sort_column.desc())
+                    else:
+                        query = query.order_by(sort_column.asc())
+        
+        # Apply pagination
+        query = query.offset(offset)
+        
+        # Handle limit - if empty string or None, don't limit (show all)
+        if limit and limit.strip() and limit != "":
+            try:
+                limit_int = int(limit)
+                if limit_int > 0:
+                    query = query.limit(limit_int)
+            except ValueError:
+                pass
+        
+        # Execute query
+        hits = query.all()
+        
+        # Debug: Log the results to check for duplicates
+        repo_names = [hit.repo_name for hit in hits]
+        unique_repo_names = list(set(repo_names))
+        logger.info(f"/api/hits: Total results: {len(hits)}, Unique repos: {len(unique_repo_names)}")
+        if len(repo_names) != len(unique_repo_names):
+            logger.warning(f"/api/hits: DUPLICATES DETECTED! Total: {len(repo_names)}, Unique: {len(unique_repo_names)}")
+            # Find duplicates
+            from collections import Counter
+            duplicate_counts = Counter(repo_names)
+            duplicates = [repo for repo, count in duplicate_counts.items() if count > 1]
+            logger.warning(f"/api/hits: Duplicate repo names: {duplicates}")
+        
+        # Convert to list of dictionaries
+        result = []
+        for hit in hits:
+            result.append({
+                "repo_name": hit.repo_name,
+                "owner_type": hit.owner_type,
+                "owner_login": hit.owner_login,
+                "repo_url": hit.repo_url,
+                "stars": hit.stars,
+                "description": hit.description or "",
+                "owner_email": hit.owner_email,
+                "contact_source": hit.contact_source,
+                "contact_extracted_at": str(hit.contact_extracted_at) if hit.contact_extracted_at else "",
+                "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else "",
+                "top_contributor": hit.top_contributor,
+                "top_contributor_email": hit.top_contributor_email,
+                "file_count": hit.file_count,
+                "all_markers": hit.all_markers
+            })
+        
+        return {
+            "hits": result,
+            "total": len(result),
+            "limit": limit if limit and limit.strip() else "all",
+            "offset": offset
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/api/files")
+async def get_files(
+    limit: Optional[str] = Query(None),
+    offset: int = Query(0, ge=0),
+    sort_by: str = Query("id"),
+    sort_order: str = Query("desc"),
+    filter_marker: Optional[str] = Query(None),
+    marker: Optional[str] = Query(None),
+    filter_owner_type: Optional[str] = Query(None),
+    owner_type: Optional[str] = Query(None),
+    filter_owner_login: Optional[str] = Query(None),
+    has_email: Optional[bool] = Query(None),
+    has_top_contributor_email: Optional[bool] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get individual file records with AI markers (legacy endpoint for detailed file-level data)"""
+    try:
+        # Start with base query
+        query = db.query(MarkerHit)
+        
+        # Apply filters
+        marker_filter = filter_marker or marker
+        if marker_filter:
+            markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
+            if markers:
+                from sqlalchemy import or_
+                marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
+                query = query.filter(or_(*marker_conditions))
+        
+        owner_type_filter = filter_owner_type or owner_type
+        if owner_type_filter:
+            query = query.filter(MarkerHit.owner_type == owner_type_filter)
+        
+        if filter_owner_login:
+            query = query.filter(MarkerHit.owner_login.contains(filter_owner_login))
+        
+        if has_email is not None:
+            if has_email:
+                query = query.filter(MarkerHit.owner_email.isnot(None), MarkerHit.owner_email != "")
+            else:
+                query = query.filter((MarkerHit.owner_email.is_(None)) | (MarkerHit.owner_email == ""))
+        
+        if has_top_contributor_email is not None:
+            if has_top_contributor_email:
+                query = query.filter(MarkerHit.top_contributor_email.isnot(None), MarkerHit.top_contributor_email != "")
+            else:
+                query = query.filter((MarkerHit.top_contributor_email.is_(None)) | (MarkerHit.top_contributor_email == ""))
+        
+        # Apply sorting
+        if sort_by:
+            sort_mapping = {
+                "stars_desc": ("stars", "desc"),
+                "stars_asc": ("stars", "asc"),
+                "commit_desc": ("latest_commit_date", "desc"),
+                "commit_asc": ("latest_commit_date", "asc"),
+                "name_desc": ("repo_name", "desc"),
+                "name_asc": ("repo_name", "asc"),
                 "id": ("id", "desc")
             }
             
@@ -337,10 +523,8 @@ async def get_hits(
                 column_name, order = sort_mapping[sort_by]
                 sort_column = getattr(MarkerHit, column_name)
                 
-                # Special handling for commit date sorting to put "N/A" values at the bottom
                 if column_name == "latest_commit_date":
                     if order.upper() == "DESC":
-                        # For descending: put N/A, empty, and NULL values at the bottom
                         from sqlalchemy import case, desc, asc
                         query = query.order_by(
                             case(
@@ -352,7 +536,6 @@ async def get_hits(
                             MarkerHit.latest_commit_date.desc()
                         )
                     else:
-                        # For ascending: put N/A, empty, and NULL values at the bottom
                         from sqlalchemy import case, desc, asc
                         query = query.order_by(
                             case(
@@ -364,13 +547,11 @@ async def get_hits(
                             MarkerHit.latest_commit_date.asc()
                         )
                 else:
-                    # Regular sorting for other columns
                     if order.upper() == "DESC":
                         query = query.order_by(sort_column.desc())
                     else:
                         query = query.order_by(sort_column.asc())
             else:
-                # Fallback to direct column sorting
                 if hasattr(MarkerHit, sort_by):
                     sort_column = getattr(MarkerHit, sort_by)
                     if sort_order.upper() == "DESC":
@@ -381,17 +562,14 @@ async def get_hits(
         # Apply pagination
         query = query.offset(offset)
         
-        # Handle limit - if empty string or None, don't limit (show all)
-        # If limit is provided and valid, apply it; otherwise show all results
+        # Handle limit
         if limit and limit.strip() and limit != "":
             try:
                 limit_int = int(limit)
                 if limit_int > 0:
                     query = query.limit(limit_int)
             except ValueError:
-                # If limit is not a valid integer, don't apply limit (show all)
                 pass
-        # If no limit provided, show all results (no limit applied)
         
         # Execute query
         hits = query.all()
@@ -437,57 +615,76 @@ async def get_top_repos(
     owner_type: Optional[str] = Query(None),  # Frontend sends 'owner_type'
     db: Session = Depends(get_db)
 ):
-    """Get top repositories by stars"""
+    """Get top unique repositories by stars"""
     try:
-        # Start with base query
-        query = db.query(MarkerHit)
+        from sqlalchemy import func
+        
+        # Start with base query for unique repositories
+        query = db.query(
+            MarkerHit.repo_name,
+            func.max(MarkerHit.owner_type).label('owner_type'),
+            func.max(MarkerHit.owner_login).label('owner_login'),
+            func.max(MarkerHit.repo_url).label('repo_url'),
+            func.max(MarkerHit.stars).label('stars'),
+            func.max(MarkerHit.description).label('description'),
+            func.max(MarkerHit.owner_email).label('owner_email'),
+            func.max(MarkerHit.contact_source).label('contact_source'),
+            func.max(MarkerHit.contact_extracted_at).label('contact_extracted_at'),
+            func.max(MarkerHit.latest_commit_date).label('latest_commit_date'),
+            func.max(MarkerHit.top_contributor).label('top_contributor'),
+            func.max(MarkerHit.top_contributor_email).label('top_contributor_email'),
+            func.count(MarkerHit.id).label('file_count'),
+            func.string_agg(MarkerHit.marker, ', ').label('all_markers')
+        ).group_by(MarkerHit.repo_name)
         
         # Apply filters
-        # Handle marker filter (frontend sends 'marker', backend expects 'filter_marker')
         marker_filter = filter_marker or marker
         if marker_filter:
-            # Split by comma to handle multiple markers
             markers = [m.strip() for m in marker_filter.split(',') if m.strip()]
             if markers:
-                # Create OR condition for multiple markers
                 from sqlalchemy import or_
                 marker_conditions = [MarkerHit.marker.contains(marker) for marker in markers]
-                query = query.filter(or_(*marker_conditions))
-        # Handle owner_type filter (frontend sends 'owner_type', backend expects 'filter_owner_type')
+                query = query.having(or_(*marker_conditions))
+        
         owner_type_filter = filter_owner_type or owner_type
         if owner_type_filter:
             query = query.filter(MarkerHit.owner_type == owner_type_filter)
         
         # Sort by stars descending (top repositories)
-        query = query.order_by(MarkerHit.stars.desc())
+        query = query.order_by(func.max(MarkerHit.stars).desc())
         
-        # Apply limit - if empty string or None, don't limit (show all)
-        # If limit is provided and valid, apply it; otherwise show all results
+        # Apply limit
         if limit and limit.strip() and limit != "":
             try:
                 limit_int = int(limit)
                 if limit_int > 0:
                     query = query.limit(limit_int)
             except ValueError:
-                # If limit is not a valid integer, don't apply limit (show all)
                 pass
-        # If no limit provided, show all results (no limit applied)
         
         # Execute query
         hits = query.all()
+        
+        # Debug: Log the results to check for duplicates
+        repo_names = [hit.repo_name for hit in hits]
+        unique_repo_names = list(set(repo_names))
+        logger.info(f"/api/top-repos: Total results: {len(hits)}, Unique repos: {len(unique_repo_names)}")
+        if len(repo_names) != len(unique_repo_names):
+            logger.warning(f"/api/top-repos: DUPLICATES DETECTED! Total: {len(repo_names)}, Unique: {len(unique_repo_names)}")
+            # Find duplicates
+            from collections import Counter
+            duplicate_counts = Counter(repo_names)
+            duplicates = [repo for repo, count in duplicate_counts.items() if count > 1]
+            logger.warning(f"/api/top-repos: Duplicate repo names: {duplicates}")
         
         # Convert to list of dictionaries
         result = []
         for hit in hits:
             result.append({
-                "id": hit.id,
-                "marker": hit.marker,
+                "repo_name": hit.repo_name,
                 "owner_type": hit.owner_type,
                 "owner_login": hit.owner_login,
-                "repo_name": hit.repo_name,
                 "repo_url": hit.repo_url,
-                "file_path": hit.file_path,
-                "file_url": hit.file_url,
                 "stars": hit.stars,
                 "description": hit.description or "",
                 "owner_email": hit.owner_email,
@@ -495,7 +692,9 @@ async def get_top_repos(
                 "contact_extracted_at": str(hit.contact_extracted_at) if hit.contact_extracted_at else "",
                 "latest_commit_date": str(hit.latest_commit_date) if hit.latest_commit_date else "",
                 "top_contributor": hit.top_contributor,
-                "top_contributor_email": hit.top_contributor_email
+                "top_contributor_email": hit.top_contributor_email,
+                "file_count": hit.file_count,
+                "all_markers": hit.all_markers
             })
         
         return {
@@ -916,6 +1115,12 @@ async def check_duplicates_endpoint(db: Session = Depends(get_db)):
             "total_records": total_records,
             "unique_repositories": unique_repos,
             "average_files_per_repo": round(total_records / unique_repos, 2) if unique_repos > 0 else 0,
+            "duplicate_analysis": {
+                "total_file_records": total_records,
+                "unique_repositories": unique_repos,
+                "duplicate_repos": total_records - unique_repos,
+                "duplicate_percentage": round(((total_records - unique_repos) / total_records) * 100, 2) if total_records > 0 else 0
+            },
             "potential_duplicates": [
                 {
                     "repo_name": dup.repo_name,

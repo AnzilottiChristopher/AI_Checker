@@ -1178,7 +1178,8 @@
 
         // Generate unique entry ID
         function generateEntryId(item) {
-            return `${item.marker}-${item.repo_name}`;
+            // Use only repo_name to ensure uniqueness since backend already groups by repo
+            return item.repo_name;
         }
 
         // Initialize the app
@@ -1839,6 +1840,17 @@
                          stars: item.stars
                      })) : 'No hits data');
                      
+                     // Debug: Check for duplicates in the received data
+                     const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
+                     const uniqueRepoNames = [...new Set(repoNames)];
+                     console.log('Total repositories received:', repoNames.length);
+                     console.log('Unique repositories:', uniqueRepoNames.length);
+                     if (repoNames.length !== uniqueRepoNames.length) {
+                         console.log('DUPLICATES DETECTED in received data!');
+                         const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
+                         console.log('Duplicate repo names:', [...new Set(duplicates)]);
+                     }
+                     
                      displayResults(data.hits || []);
                  } else {
                      const error = await response.json();
@@ -1881,6 +1893,17 @@
                          repo: item.repo_name,
                          stars: item.stars
                      })) : 'No hits data');
+                     
+                     // Debug: Check for duplicates in the received data
+                     const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
+                     const uniqueRepoNames = [...new Set(repoNames)];
+                     console.log('Total repositories received:', repoNames.length);
+                     console.log('Unique repositories:', uniqueRepoNames.length);
+                     if (repoNames.length !== uniqueRepoNames.length) {
+                         console.log('DUPLICATES DETECTED in received data!');
+                         const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
+                         console.log('Duplicate repo names:', [...new Set(duplicates)]);
+                     }
                      
                      displayResults(data.hits || [], 'Top Repositories by Stars');
                  } else {
@@ -1965,7 +1988,10 @@
 
             let tableHTML = `
                 <div style="margin-top: 1rem;">
-                    <h4>${title} (${data.length} records)</h4>
+                    <h4>${title} (${data.length} unique repositories)</h4>
+                    <p style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                        Showing unique repositories only. Each repository may contain multiple AI marker files.
+                    </p>
                     <div style="margin-bottom: 1rem;">
                         <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
                             <input type="checkbox" id="selectAll" checked style="width: auto;">
@@ -2015,7 +2041,7 @@
                             <td style="text-align: center;">
                                 <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
                             </td>
-                            <td><span class="marker-badge">${item.marker}</span></td>
+                            <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
                             <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
                             <td>${ownerInfo}</td>
                             <td>⭐ ${item.stars || 0}</td>
@@ -2070,7 +2096,7 @@
                             <td style="text-align: center;">
                                 <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" style="width: auto;">
                             </td>
-                            <td><span class="marker-badge">${item.marker}</span></td>
+                            <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
                             <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
                             <td>${ownerInfo}</td>
                             <td>⭐ ${item.stars || 0}</td>
