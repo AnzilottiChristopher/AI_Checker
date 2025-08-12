@@ -1091,6 +1091,9 @@
                                 <button class="chip-btn" onclick="getTopRepos()" title="Get Top Repositories">
                                     🏆
                                 </button>
+                                <button class="chip-btn" onclick="resetFilters()" title="Reset All Filters">
+                                    🔄
+                                </button>
                             </div>
                         </div>
                         
@@ -1888,6 +1891,37 @@
                  showAlert(`Failed to get top repos: ${error.message}`, 'error');
              }
          }
+
+        // Reset all filters to their default state
+        function resetFilters() {
+            // Reset marker filter - uncheck all checkboxes
+            const markerCheckboxes = document.querySelectorAll('#markerDropdown input[type="checkbox"]');
+            markerCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            // Reset owner type filter
+            document.getElementById('ownerTypeFilter').value = '';
+            
+            // Reset has email filter
+            document.getElementById('hasEmailFilter').value = '';
+            
+            // Reset has top contributor email filter
+            document.getElementById('hasTopContributorEmailFilter').value = '';
+            
+            // Reset sort by filter
+            document.getElementById('sortByFilter').value = 'stars_desc';
+            
+            // Reset limit filter
+            document.getElementById('limitFilter').value = '';
+            
+            // Update marker filter button text
+            const markerFilterBtn = document.getElementById('markerFilterBtn');
+            markerFilterBtn.textContent = '🎯 Filter by Marker ▼';
+            
+            // Show success message
+            showAlert('All filters have been reset to their default state.', 'success');
+        }
 
         // Toggle export dropdown
         function toggleExportDropdown() {
