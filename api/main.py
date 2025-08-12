@@ -880,3 +880,68 @@ async def populate_top_contributors_endpoint(request: dict):
     except Exception as e:
         logger.error(f"Top contributor population error: {e}")
         raise HTTPException(status_code=500, detail=f"Top contributor population error: {str(e)}")
+
+@app.get("/api/check-duplicates")
+async def check_duplicates_endpoint(db: Session = Depends(get_db)):
+    """Check for duplicate entries in the database"""
+    try:
+        from sqlalchemy import func
+        
+        # Check for exact duplicates (same repo + file)
+        potential_duplicates = db.query(
+            MarkerHit.repo_name,
+            MarkerHit.file_path,
+            func.count(MarkerHit.id).label('count'),
+            func.min(MarkerHit.id).label('min_id'),
+            func.max(MarkerHit.id).label('max_id')
+        ).group_by(
+            MarkerHit.repo_name,
+            MarkerHit.file_path
+        ).having(func.count(MarkerHit.id) > 1).all()
+        
+        # Get repository distribution
+        repo_counts = db.query(
+            MarkerHit.repo_name,
+            func.count(MarkerHit.id).label('file_count')
+        ).group_by(MarkerHit.repo_name).order_by(func.count(MarkerHit.id).desc()).limit(10).all()
+        
+        # Get total counts
+        total_records = db.query(MarkerHit).count()
+        unique_repos = db.query(MarkerHit.repo_name).distinct().count()
+        
+        # Get repositories with many files
+        many_files = db.query(
+            MarkerHit.repo_name,
+            func.count(MarkerHit.id).label('file_count')
+        ).group_by(MarkerHit.repo_name).having(func.count(MarkerHit.id) >= 5).order_by(func.count(MarkerHit.id).desc()).all()
+        
+        return {
+            "status": "success",
+            "total_records": total_records,
+            "unique_repositories": unique_repos,
+            "average_files_per_repo": round(total_records / unique_repos, 2) if unique_repos > 0 else 0,
+            "potential_duplicates": [
+                {
+                    "repo_name": dup.repo_name,
+                    "file_path": dup.file_path,
+                    "count": dup.count,
+                    "id_range": f"{dup.min_id} - {dup.max_id}"
+                } for dup in potential_duplicates
+            ],
+            "top_repositories": [
+                {
+                    "repo_name": repo.repo_name,
+                    "file_count": repo.file_count
+                } for repo in repo_counts
+            ],
+            "repositories_with_many_files": [
+                {
+                    "repo_name": repo.repo_name,
+                    "file_count": repo.file_count
+                } for repo in many_files
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking duplicates: {e}")
+        raise HTTPException(status_code=500, detail=f"Error checking duplicates: {str(e)}")
