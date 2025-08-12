@@ -855,3 +855,21 @@ async def migrate_database_endpoint():
     except Exception as e:
         logger.error(f"Migration endpoint error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration error: {str(e)}")
+
+@app.post("/api/populate-top-contributors")
+async def populate_top_contributors_endpoint(limit: int = None):
+    """Populate top contributor data for existing repositories"""
+    try:
+        from populate_top_contributors import TopContributorPopulator
+        
+        populator = TopContributorPopulator()
+        populator.populate_top_contributors(limit)
+        
+        return {
+            "status": "success",
+            "message": "Top contributor population completed successfully",
+            "limit": limit
+        }
+    except Exception as e:
+        logger.error(f"Top contributor population error: {e}")
+        raise HTTPException(status_code=500, detail=f"Top contributor population error: {str(e)}")
