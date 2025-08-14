@@ -1830,29 +1830,21 @@
                  if (sortByFilter) params.append('sort_by', sortByFilter);
                  if (limitFilter) params.append('limit', limitFilter);
 
-                                                                      // Try to get data from the hits endpoint
-                 let response = await fetch(`${API_BASE}/hits?${params}`);
+                 // Add timeout to prevent hanging requests
+                 const controller = new AbortController();
+                 const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                 
+                 // Try to get data from the hits endpoint
+                 let response = await fetch(`${API_BASE}/hits?${params}`, {
+                     signal: controller.signal
+                 });
+                 clearTimeout(timeoutId);
                  let data;
                  
                  if (response.ok) {
                      data = await response.json();
                      
-                     // Debug: Log the first few results to verify sorting
-                     console.log('Query results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
-                         repo: item.repo_name,
-                         stars: item.stars
-                     })) : 'No hits data');
-                     
-                     // Debug: Check for duplicates in the received data
-                     const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
-                     const uniqueRepoNames = [...new Set(repoNames)];
-                     console.log('Total repositories received:', repoNames.length);
-                     console.log('Unique repositories:', uniqueRepoNames.length);
-                     if (repoNames.length !== uniqueRepoNames.length) {
-                         console.log('DUPLICATES DETECTED in received data!');
-                         const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
-                         console.log('Duplicate repo names:', [...new Set(duplicates)]);
-                     }
+
                      
                      displayResults(data.hits || [], 'Query Results');
                  } else {
@@ -1860,7 +1852,11 @@
                      showAlert(`Query failed: ${error.detail}`, 'error');
                  }
              } catch (error) {
-                 showAlert(`Query failed: ${error.message}`, 'error');
+                 if (error.name === 'AbortError') {
+                     showAlert('Query timed out. Please try again or reduce the number of results.', 'error');
+                 } else {
+                     showAlert(`Query failed: ${error.message}`, 'error');
+                 }
              }
 
              queryBtn.disabled = false;
@@ -1891,22 +1887,7 @@
                  if (response.ok) {
                      const data = await response.json();
                      
-                     // Debug: Log the first few results to verify sorting
-                     console.log('Top repos results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
-                         repo: item.repo_name,
-                         stars: item.stars
-                     })) : 'No hits data');
-                     
-                     // Debug: Check for duplicates in the received data
-                     const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
-                     const uniqueRepoNames = [...new Set(repoNames)];
-                     console.log('Total repositories received:', repoNames.length);
-                     console.log('Unique repositories:', uniqueRepoNames.length);
-                     if (repoNames.length !== uniqueRepoNames.length) {
-                         console.log('DUPLICATES DETECTED in received data!');
-                         const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
-                         console.log('Duplicate repo names:', [...new Set(duplicates)]);
-                     }
+
                      
                      displayResults(data.hits || [], 'Top Repositories by Stars');
                  } else {
@@ -2241,19 +2222,22 @@
                  const prioritizedData = [];
                  const otherData = [];
                  
-                 data.forEach((item, index) => {
+                 // Use a more efficient loop
+                 for (let i = 0; i < data.length; i++) {
+                     const item = data[i];
                      const hasTopContributor = item.top_contributor && item.top_contributor !== 'N/A';
                      const hasTopContributorEmail = item.top_contributor_email && item.top_contributor_email !== 'N/A';
                      
                      if (hasTopContributor && hasTopContributorEmail) {
-                         prioritizedData.push({ ...item, originalIndex: index });
+                         prioritizedData.push({ ...item, originalIndex: i });
                      } else {
-                         otherData.push({ ...item, originalIndex: index });
+                         otherData.push({ ...item, originalIndex: i });
                      }
-                 });
+                 }
 
                  // Display prioritized data first
-                 prioritizedData.forEach((item, index) => {
+                 for (let i = 0; i < prioritizedData.length; i++) {
+                     const item = prioritizedData[i];
                      // Check if this entry has been exported
                      const entryId = generateEntryId(item);
                      const isExported = isEntryExported(entryId);
@@ -2287,7 +2271,7 @@
                              <td>${item.description || 'N/A'}</td>
                          </tr>
                      `;
-                 });
+                 }
 
                  // Add show more section if there are other entries
                  if (otherData.length > 0) {
@@ -2308,7 +2292,8 @@
                      `;
 
                      // Add hidden other entries
-                     otherData.forEach((item, index) => {
+                     for (let i = 0; i < otherData.length; i++) {
+                         const item = otherData[i];
                          // Check if this entry has been exported
                          const entryId = generateEntryId(item);
                          const isExported = isEntryExported(entryId);
@@ -2329,7 +2314,7 @@
                          tableHTML += `
                              <tr class="${exportedClass} other-entry" style="display: none;">
                                  <td style="text-align: center;">
-                                     <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" style="width: auto;">
+                                 <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" style="width: auto;">
                                  </td>
                                  <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
                                  <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
@@ -2342,7 +2327,7 @@
                                  <td>${item.description || 'N/A'}</td>
                              </tr>
                          `;
-                     });
+                     }
                  }
              }
              
