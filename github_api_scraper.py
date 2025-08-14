@@ -638,8 +638,8 @@ class GitHubAPIScraper:
     def _get_first_search_result(self, marker: str, min_stars: int = 0) -> Optional[dict]:
         """Get just the first search result to check if we should resume"""
         try:
-            # Use filename search instead of path search for more flexibility
-            query = f'filename:{marker}'
+            # Use path search (original working syntax)
+            query = f'path:{marker}'
             if min_stars > 0:
                 query += f' stars:>={min_stars}'
             
@@ -757,8 +757,8 @@ class GitHubAPIScraper:
         
         results = {}
         for marker in ai_markers:
-            # Build the search query for the filename
-            query = f'filename:{marker}'
+            # Build the search query for the file path
+            query = f'path:{marker}'
             if min_stars > 0:
                 query += f' stars:>={min_stars}'
             
@@ -815,7 +815,7 @@ class GitHubAPIScraper:
         new_repos_found = set()  # Track new repositories for auto-population
         
         # Build search query
-        query = f'filename:{marker}'
+        query = f'path:{marker}'
         if min_stars > 0:
             query += f' stars:>={min_stars}'
         
@@ -1081,19 +1081,10 @@ class GitHubAPIScraper:
                 # Get current scraping state for this marker
                 current_state = state_manager.get_scraping_state(marker)
                 
-                # Check if first result is already in database
-                first_result = self._get_first_search_result(marker, min_stars)
-                
-                if first_result and self._is_repo_in_database(first_result['repo_name']):
-                    # Resume from last known position
-                    start_page = current_state['page']
-                    start_position = current_state['position']
-                    logger.info(f"Resuming {marker} scraping from page {start_page}, position {start_position}")
-                else:
-                    # Start fresh - new data available
-                    start_page = 1
-                    start_position = 0
-                    logger.info(f"Starting fresh {marker} scraping")
+                # Always start from the saved pagination state (simplified approach)
+                start_page = current_state['page']
+                start_position = current_state['position']
+                logger.info(f"Starting {marker} scraping from page {start_page}, position {start_position}")
                 
                 # Scrape with pagination
                 result = self._scrape_marker_with_pagination(
