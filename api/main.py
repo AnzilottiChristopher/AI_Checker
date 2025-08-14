@@ -1368,3 +1368,125 @@ async def get_unique_repos(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+# New API endpoints for managing new/old data display
+@app.get("/api/hits/new")
+async def get_new_hits(db: Session = Depends(get_db)):
+    """Get only new records (is_new=True) for frontend display"""
+    try:
+        # Get only new records
+        new_hits = db.query(MarkerHit).filter(MarkerHit.is_new == True).all()
+        
+        # Convert to list of dictionaries
+        hits_data = []
+        for hit in new_hits:
+            hits_data.append({
+                "id": hit.id,
+                "marker": hit.marker,
+                "repo_name": hit.repo_name,
+                "repo_url": hit.repo_url,
+                "file_path": hit.file_path,
+                "file_url": hit.file_url,
+                "stars": hit.stars,
+                "description": hit.description,
+                "owner_type": hit.owner_type,
+                "owner_login": hit.owner_login,
+                "owner_email": hit.owner_email,
+                "contact_source": hit.contact_source,
+                "contact_extracted_at": hit.contact_extracted_at,
+                "latest_commit_date": hit.latest_commit_date,
+                "top_contributor": hit.top_contributor,
+                "top_contributor_email": hit.top_contributor_email,
+                "scraping_page": hit.scraping_page,
+                "scraping_position": hit.scraping_position,
+                "last_scraped_at": hit.last_scraped_at.isoformat() if hit.last_scraped_at else None,
+                "is_new": hit.is_new
+            })
+        
+        return {
+            "hits": hits_data,
+            "total_new_hits": len(hits_data),
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error getting new hits: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting new hits: {str(e)}")
+
+@app.get("/api/hits/all")
+async def get_all_hits(db: Session = Depends(get_db)):
+    """Get all records (both new and old) for frontend display"""
+    try:
+        # Get all records
+        all_hits = db.query(MarkerHit).all()
+        
+        # Convert to list of dictionaries
+        hits_data = []
+        for hit in all_hits:
+            hits_data.append({
+                "id": hit.id,
+                "marker": hit.marker,
+                "repo_name": hit.repo_name,
+                "repo_url": hit.repo_url,
+                "file_path": hit.file_path,
+                "file_url": hit.file_url,
+                "stars": hit.stars,
+                "description": hit.description,
+                "owner_type": hit.owner_type,
+                "owner_login": hit.owner_login,
+                "owner_email": hit.owner_email,
+                "contact_source": hit.contact_source,
+                "contact_extracted_at": hit.contact_extracted_at,
+                "latest_commit_date": hit.latest_commit_date,
+                "top_contributor": hit.top_contributor,
+                "top_contributor_email": hit.top_contributor_email,
+                "scraping_page": hit.scraping_page,
+                "scraping_position": hit.scraping_position,
+                "last_scraped_at": hit.last_scraped_at.isoformat() if hit.last_scraped_at else None,
+                "is_new": hit.is_new
+            })
+        
+        return {
+            "hits": hits_data,
+            "total_hits": len(hits_data),
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error getting all hits: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting all hits: {str(e)}")
+
+@app.post("/api/hits/mark-old")
+async def mark_all_as_old(db: Session = Depends(get_db)):
+    """Mark all records as old (is_new=False) - called after user clicks 'Load all data'"""
+    try:
+        # Update all records to set is_new = False
+        updated_count = db.query(MarkerHit).update({MarkerHit.is_new: False})
+        db.commit()
+        
+        return {
+            "message": f"Marked {updated_count} records as old",
+            "updated_count": updated_count,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error marking records as old: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error marking records as old: {str(e)}")
+
+@app.get("/api/hits/stats")
+async def get_hits_stats(db: Session = Depends(get_db)):
+    """Get statistics about new vs old records"""
+    try:
+        # Count new and old records
+        new_count = db.query(MarkerHit).filter(MarkerHit.is_new == True).count()
+        old_count = db.query(MarkerHit).filter(MarkerHit.is_new == False).count()
+        total_count = db.query(MarkerHit).count()
+        
+        return {
+            "new_records": new_count,
+            "old_records": old_count,
+            "total_records": total_count,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error getting hits stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting hits stats: {str(e)}")

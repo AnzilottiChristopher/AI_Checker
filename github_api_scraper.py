@@ -78,6 +78,8 @@ class MarkerHit(Base):
     scraping_page = Column(Integer)
     scraping_position = Column(Integer)
     last_scraped_at = Column(DateTime, default=datetime.utcnow)
+    # New records tracking
+    is_new = Column(Boolean, default=False, index=True)
     
     # Add unique constraint to prevent duplicates
     __table_args__ = (
@@ -112,7 +114,7 @@ def migrate_database():
                     SELECT column_name 
                     FROM information_schema.columns 
                     WHERE table_name = 'marker_hits' 
-                    AND column_name IN ('top_contributor', 'top_contributor_email', 'scraping_page', 'scraping_position', 'last_scraped_at')
+                    AND column_name IN ('top_contributor', 'top_contributor_email', 'scraping_page', 'scraping_position', 'last_scraped_at', 'is_new')
                 """)).fetchall()
                 
                 existing_columns = [row[0] for row in result]
@@ -152,6 +154,14 @@ def migrate_database():
                         logger.info("Adding last_scraped_at column...")
                         session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS last_scraped_at TIMESTAMP"))
                         logger.info("last_scraped_at column added")
+                
+                # Check for is_new column
+                if 'is_new' in existing_columns:
+                    logger.info("is_new column already exists")
+                else:
+                    logger.info("Adding is_new column...")
+                    session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS is_new BOOLEAN DEFAULT FALSE"))
+                    logger.info("is_new column added")
             
             logger.info("Committing changes...")
             session.commit()
@@ -159,7 +169,7 @@ def migrate_database():
             
             # Verify the new columns exist
             logger.info("Verifying new columns...")
-            result = session.execute(text("SELECT top_contributor, top_contributor_email, scraping_page, scraping_position, last_scraped_at FROM marker_hits LIMIT 1")).fetchall()
+            result = session.execute(text("SELECT top_contributor, top_contributor_email, scraping_page, scraping_position, last_scraped_at, is_new FROM marker_hits LIMIT 1")).fetchall()
             logger.info(f"New columns verified successfully. Result: {result}")
             return True
             
@@ -1088,7 +1098,8 @@ class GitHubAPIScraper:
                             owner_email=owner_contacts['email'],
                             contact_source=owner_contacts['source'],
                             contact_extracted_at=datetime.utcnow().isoformat(),
-                            latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None
+                            latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None,
+                            is_new=True  # Mark as new for frontend display
                         )
                         
                         # Add to database
@@ -1235,9 +1246,10 @@ class GitHubAPIScraper:
                                 owner_email=owner_contacts['email'],
                                 contact_source=owner_contacts['source'],
                                 contact_extracted_at=datetime.utcnow().isoformat(),
-                                latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None,
-                                scraping_page=current_page,
-                                scraping_position=i + 1
+                                                             latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None,
+                             scraping_page=current_page,
+                             scraping_position=i + 1,
+                             is_new=True  # Mark as new for frontend display
                             )
                             
                             # Add to database
@@ -1462,7 +1474,8 @@ class GitHubAPIScraper:
                             owner_email=owner_contacts['email'],
                             contact_source=owner_contacts['source'],
                             contact_extracted_at=datetime.utcnow().isoformat(),
-                            latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None
+                            latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None,
+                            is_new=True  # Mark as new for frontend display
                         )
                         
                         # Add to database
