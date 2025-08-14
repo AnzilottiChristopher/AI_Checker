@@ -298,20 +298,24 @@ class GitHubAPIScraper:
     """
     
     def __init__(self, token: Optional[str] = None, backup_tokens: Optional[List[str]] = None):
-        self.tokens = [token] if token else []
+        # Primary token (most common use case)
+        self.primary_token = token
+        
+        # Backup tokens (optional, for advanced users)
+        self.backup_tokens = backup_tokens or []
+        self.all_tokens = [token] if token else []
         if backup_tokens:
-            self.tokens.extend(backup_tokens)
+            self.all_tokens.extend(backup_tokens)
         
         self.current_token_index = 0
-        self.token_usage_count = {}  # Track usage per token
-        self.rate_limit_errors = {}  # Track rate limit errors per token
+        self.rate_limit_errors = 0  # Simple counter for rate limit errors
         
-        # Initialize with first available token
-        if self.tokens:
-            self._initialize_with_token(self.tokens[0])
-            logger.info(f"GitHub API initialized with primary token (first 8 chars: {self.tokens[0][:8]}...)")
-            if len(self.tokens) > 1:
-                logger.info(f"Backup tokens available: {len(self.tokens) - 1}")
+        # Initialize with primary token
+        if self.primary_token:
+            self._initialize_with_token(self.primary_token)
+            logger.info(f"GitHub API initialized with token (first 8 chars: {self.primary_token[:8]}...)")
+            if self.backup_tokens:
+                logger.info(f"Backup tokens available: {len(self.backup_tokens)}")
             
             # Add initial delay to avoid rate limits on startup
             logger.info("Adding initial delay to avoid rate limits...")
@@ -323,9 +327,9 @@ class GitHubAPIScraper:
         
         # Rate limiting
         self.requests_made = 0
-        self.rate_limit_delay = 2.0  # Increased from 1.0 to 2.0 seconds between requests
-        self.secondary_rate_limit_delay = 10.0  # Increased from 5.0 to 10.0 seconds
-        self.search_api_delay = 3.0  # Additional delay specifically for search API calls
+        self.rate_limit_delay = 5.0  # Increased to 5 seconds between requests
+        self.secondary_rate_limit_delay = 30.0  # Increased to 30 seconds
+        self.search_api_delay = 10.0  # Increased to 10 seconds for search API calls
     
     def _initialize_with_token(self, token: str):
         """Initialize GitHub client and session with a specific token."""
@@ -335,15 +339,15 @@ class GitHubAPIScraper:
         self.current_token = token
     
     def _rotate_token(self):
-        """Rotate to the next available token."""
-        if len(self.tokens) <= 1:
+        """Rotate to the next available token (only if backup tokens exist)."""
+        if not self.backup_tokens:
             logger.warning("No backup tokens available for rotation")
             return False
         
-        self.current_token_index = (self.current_token_index + 1) % len(self.tokens)
-        new_token = self.tokens[self.current_token_index]
+        self.current_token_index = (self.current_token_index + 1) % len(self.all_tokens)
+        new_token = self.all_tokens[self.current_token_index]
         
-        logger.info(f"Rotating to token {self.current_token_index + 1}/{len(self.tokens)} (first 8 chars: {new_token[:8]}...)")
+        logger.info(f"Rotating to backup token {self.current_token_index + 1}/{len(self.all_tokens)} (first 8 chars: {new_token[:8]}...)")
         self._initialize_with_token(new_token)
         return True
     
@@ -352,13 +356,8 @@ class GitHubAPIScraper:
         Handle rate limit errors intelligently.
         Returns True if we should retry the operation, False otherwise.
         """
-        current_token = self.tokens[self.current_token_index] if self.tokens else None
-        
-        # Track rate limit errors for this token
-        if current_token:
-            if current_token not in self.rate_limit_errors:
-                self.rate_limit_errors[current_token] = 0
-            self.rate_limit_errors[current_token] += 1
+        # Track rate limit errors
+        self.rate_limit_errors += 1
         
         # Check if this is a secondary rate limit (abuse rate limit)
         is_secondary_rate_limit = any(keyword in error_msg.lower() for keyword in [
@@ -368,22 +367,22 @@ class GitHubAPIScraper:
         if is_secondary_rate_limit:
             logger.warning(f"Secondary rate limit detected for {operation}. Error: {error_msg}")
             
-            # For secondary rate limits, try token rotation first
-            if len(self.tokens) > 1:
+            # For secondary rate limits, try token rotation first (if backup tokens exist)
+            if self.backup_tokens:
                 logger.info("Attempting token rotation for secondary rate limit...")
                 if self._rotate_token():
                     logger.info("Token rotated successfully, will retry operation")
                     return True
             
             # If no backup tokens or rotation failed, wait longer with exponential backoff
-            wait_time = self.secondary_rate_limit_delay * (2 ** min(self.rate_limit_errors.get(current_token, 0), 3))
+            wait_time = self.secondary_rate_limit_delay * (2 ** min(self.rate_limit_errors, 3))
             logger.warning(f"Waiting {wait_time} seconds for secondary rate limit...")
             time.sleep(wait_time)
             return True
         
         else:
             # Primary rate limit - check if we can rotate tokens
-            if len(self.tokens) > 1:
+            if self.backup_tokens:
                 logger.info("Primary rate limit reached, attempting token rotation...")
                 if self._rotate_token():
                     logger.info("Token rotated successfully, will retry operation")
@@ -400,26 +399,25 @@ class GitHubAPIScraper:
             remaining = rate_limit.core.remaining
             limit = rate_limit.core.limit
             
-            # Log rate limit status to verify token is working
-            current_token = self.tokens[self.current_token_index] if self.tokens else None
-            if current_token:
+                    # Log rate limit status to verify token is working
+            if self.primary_token:
                 logger.info(f"Rate limit: {remaining}/{limit} remaining (authenticated)")
             else:
                 logger.info(f"Rate limit: {remaining}/{limit} remaining (unauthenticated)")
             
-            if remaining < 50:  # More conservative threshold
+            if remaining < 100:  # More conservative threshold
                 reset_time = rate_limit.core.reset.timestamp()
                 current_time = time.time()
-                sleep_time = max(reset_time - current_time, 120)  # Increased minimum sleep
+                sleep_time = max(reset_time - current_time, 300)  # Increased minimum sleep to 5 minutes
                 
                 logger.warning(f"Rate limit low ({remaining} remaining). Sleeping for {sleep_time:.0f} seconds...")
                 time.sleep(sleep_time)
-            elif remaining < 200:  # More conservative threshold
+            elif remaining < 500:  # More conservative threshold
                 logger.info(f"Rate limit getting low ({remaining} remaining). Adding delay...")
-                time.sleep(2.0)  # Increased delay
+                time.sleep(5.0)  # Increased delay
             else:
-                # Always add a small delay to prevent secondary rate limits
-                time.sleep(0.5)
+                # Always add a delay to prevent secondary rate limits
+                time.sleep(2.0)
         except Exception as e:
             logger.warning(f"Error checking rate limit: {e}")
             # If we can't check rate limit, add a conservative delay
@@ -436,28 +434,51 @@ class GitHubAPIScraper:
         Returns:
             The result of the API call, or None if all retries failed
         """
-        max_retries = len(self.tokens) if self.tokens else 1
+        max_retries = 3  # Fixed number of retries regardless of token count
         retry_count = 0
         
         while retry_count < max_retries:
             try:
-                return api_call_func(*args, **kwargs)
+                result = api_call_func(*args, **kwargs)
+                if result is not None:
+                    return result
+                else:
+                    logger.warning(f"API call returned None, retrying... (attempt {retry_count + 1})")
+                    retry_count += 1
+                    time.sleep(5.0)  # Wait 5 seconds before retry
+                    continue
             except Exception as e:
                 error_msg = str(e)
                 
                 # Check if this is a rate limit error
                 if "rate limit" in error_msg.lower() or "403" in error_msg:
-                    if self._handle_rate_limit_error(error_msg, f"API call (attempt {retry_count + 1})"):
+                    logger.warning(f"Rate limit error on attempt {retry_count + 1}: {error_msg}")
+                    
+                    # Try token rotation first (if backup tokens exist)
+                    if self.backup_tokens:
+                        logger.info("Attempting token rotation...")
+                        if self._rotate_token():
+                            logger.info("Token rotated, retrying...")
+                            retry_count += 1
+                            time.sleep(2.0)  # Short delay after token rotation
+                            continue
+                    
+                    # If no backup tokens or rotation failed, wait with exponential backoff
+                    wait_time = 30 * (2 ** retry_count)  # 30s, 60s, 120s
+                    logger.warning(f"Waiting {wait_time} seconds before retry {retry_count + 1}...")
+                    time.sleep(wait_time)
+                    retry_count += 1
+                    continue
+                else:
+                    # Non-rate-limit error, log and retry once
+                    logger.error(f"Non-rate-limit error on attempt {retry_count + 1}: {error_msg}")
+                    if retry_count < max_retries - 1:
                         retry_count += 1
+                        time.sleep(5.0)
                         continue
                     else:
-                        # Primary rate limit with no backup tokens, wait for reset
-                        logger.error(f"Rate limit exceeded and no backup tokens available. Error: {error_msg}")
+                        logger.error(f"All retry attempts failed for non-rate-limit error")
                         return None
-                else:
-                    # Non-rate-limit error, don't retry
-                    logger.error(f"API call failed with non-rate-limit error: {error_msg}")
-                    return None
         
         logger.error(f"All {max_retries} retry attempts failed")
         return None
@@ -627,12 +648,22 @@ class GitHubAPIScraper:
                 query=query, per_page=1
             )
             
-            if results and results.totalCount > 0:
+            if results and hasattr(results, 'totalCount') and results.totalCount > 0:
                 first_file = results[0]
+                logger.info(f"First result for {marker}: {first_file.repository.full_name}")
                 return {
                     'repo_name': first_file.repository.full_name,
                     'file_path': first_file.path
                 }
+            elif results and len(results) > 0:
+                first_file = results[0]
+                logger.info(f"First result for {marker}: {first_file.repository.full_name}")
+                return {
+                    'repo_name': first_file.repository.full_name,
+                    'file_path': first_file.path
+                }
+            else:
+                logger.warning(f"No results found for {marker} (API call may have failed)")
         except Exception as e:
             logger.warning(f"Error getting first result for {marker}: {e}")
         
@@ -663,9 +694,14 @@ class GitHubAPIScraper:
                 query=query, per_page=30, page=page
             )
             
-            if results:
+            if results and hasattr(results, 'totalCount'):
+                logger.info(f"Search query '{query}' page {page}: {results.totalCount} total results")
+                return list(results)
+            elif results:
+                logger.info(f"Search query '{query}' page {page}: {len(results)} results")
                 return list(results)
             else:
+                logger.warning(f"Search query '{query}' page {page}: No results returned (API call may have failed)")
                 return []
         except Exception as e:
             logger.error(f"Error getting page {page} for query '{query}': {e}")
@@ -896,13 +932,38 @@ class GitHubAPIScraper:
             limit = rate_limit.core.limit
             
             # If we have very few requests remaining, skip scraping
-            if remaining < 100:
+            if remaining < 200:
                 logger.warning(f"Rate limit too low ({remaining}/{limit}). Skipping scraping to avoid rate limit errors.")
                 return True
             
             return False
         except Exception as e:
             logger.warning(f"Error checking rate limit for skip decision: {e}")
+            return False
+    
+    def _test_search_api(self) -> bool:
+        """Test if the search API is working properly"""
+        try:
+            logger.info("Testing search API with a simple query...")
+            
+            # Test with a very common search term
+            test_results = self._make_api_call_with_retry(
+                self.github.search_code,
+                query="README.md", per_page=1
+            )
+            
+            if test_results and hasattr(test_results, 'totalCount'):
+                logger.info(f"Search API test successful: {test_results.totalCount} results for README.md")
+                return True
+            elif test_results and len(test_results) > 0:
+                logger.info(f"Search API test successful: {len(test_results)} results for README.md")
+                return True
+            else:
+                logger.error("Search API test failed: No results returned")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Search API test failed: {e}")
             return False
 
     def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0, extract_contacts: bool = False) -> dict:
@@ -936,16 +997,20 @@ class GitHubAPIScraper:
             '.aicode',
         ]
         
-        # Reduce markers if rate limit is low
+        # Reduce markers if rate limit is low (single token scenario)
         try:
             rate_limit = self.github.get_rate_limit()
             remaining = rate_limit.core.remaining
             
-            if remaining < 500:
+            if remaining < 1000:
+                # Only process top 2 markers if rate limit is very low
+                ai_markers = ai_markers[:2]
+                logger.info(f"Rate limit very low ({remaining}), processing only top 2 markers: {ai_markers}")
+            elif remaining < 2000:
                 # Only process top 3 markers if rate limit is low
                 ai_markers = ai_markers[:3]
                 logger.info(f"Rate limit low ({remaining}), processing only top 3 markers: {ai_markers}")
-            elif remaining < 1000:
+            elif remaining < 3000:
                 # Only process top 5 markers if rate limit is moderate
                 ai_markers = ai_markers[:5]
                 logger.info(f"Rate limit moderate ({remaining}), processing only top 5 markers: {ai_markers}")
@@ -971,6 +1036,17 @@ class GitHubAPIScraper:
                 "total_repos_checked": 0,
                 "new_repositories_found": 0,
                 "summary": "Skipped scraping due to rate limits"
+            }
+        
+        # Test search API before starting
+        if not self._test_search_api():
+            logger.error("Search API test failed. Skipping scraping.")
+            return {
+                "total_new_records": 0,
+                "total_repos_found": 0,
+                "total_repos_checked": 0,
+                "new_repositories_found": 0,
+                "summary": "Skipped scraping due to search API failure"
             }
         
         # Load existing repositories for duplicate checking
@@ -1029,8 +1105,8 @@ class GitHubAPIScraper:
                 else:
                     logger.warning(f"No valid result returned for marker {marker}")
                 
-                # Add delay between markers - increased
-                time.sleep(2.0)
+                # Add delay between markers - increased significantly
+                time.sleep(10.0)
                     
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
