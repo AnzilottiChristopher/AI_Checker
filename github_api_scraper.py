@@ -327,9 +327,9 @@ class GitHubAPIScraper:
         
         # Rate limiting
         self.requests_made = 0
-        self.rate_limit_delay = 5.0  # Reduced to 5 seconds between requests
-        self.secondary_rate_limit_delay = 30.0  # Reduced to 30 seconds
-        self.search_api_delay = 10.0  # Reduced to 10 seconds for search API calls
+        self.rate_limit_delay = 2.0  # Reduced to 2 seconds between requests
+        self.secondary_rate_limit_delay = 15.0  # Reduced to 15 seconds
+        self.search_api_delay = 3.0  # Reduced to 3 seconds for search API calls
     
     def _initialize_with_token(self, token: str):
         """Initialize GitHub client and session with a specific token."""
@@ -638,7 +638,8 @@ class GitHubAPIScraper:
     def _get_first_search_result(self, marker: str, min_stars: int = 0) -> Optional[dict]:
         """Get just the first search result to check if we should resume"""
         try:
-            query = f'path:{marker}'
+            # Use filename search instead of path search for more flexibility
+            query = f'filename:{marker}'
             if min_stars > 0:
                 query += f' stars:>={min_stars}'
             
@@ -756,8 +757,8 @@ class GitHubAPIScraper:
         
         results = {}
         for marker in ai_markers:
-            # Build the search query for the file path
-            query = f'path:{marker}'
+            # Build the search query for the filename
+            query = f'filename:{marker}'
             if min_stars > 0:
                 query += f' stars:>={min_stars}'
             
@@ -814,7 +815,7 @@ class GitHubAPIScraper:
         new_repos_found = set()  # Track new repositories for auto-population
         
         # Build search query
-        query = f'path:{marker}'
+        query = f'filename:{marker}'
         if min_stars > 0:
             query += f' stars:>={min_stars}'
         
@@ -1115,7 +1116,7 @@ class GitHubAPIScraper:
                     logger.warning(f"No valid result returned for marker {marker}")
                 
                 # Add delay between markers - reduced
-                time.sleep(15.0)
+                time.sleep(5.0)
                     
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
