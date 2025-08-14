@@ -802,7 +802,7 @@ class GitHubAPIScraper:
                 results[marker] = []
         return results
 
-    def search_ai_code_generator_files_with_pagination(self, max_repos_per_pattern: int = 10, min_stars: int = 0, existing_data: dict = None) -> dict:
+    def search_ai_code_generator_files_with_pagination(self, max_repos_per_pattern: int = 10, min_stars: int = 0, existing_data: dict = None, extract_contacts: bool = False) -> dict:
         """
         Search GitHub for repositories containing files that are markers for AI code generators.
         This is a recreation of the original working method with added pagination support.
@@ -812,6 +812,7 @@ class GitHubAPIScraper:
             max_repos_per_pattern: Maximum repositories to return per marker pattern.
             min_stars: Minimum number of stars for repositories to include.
             existing_data: Dictionary of existing results to skip (format: {marker: [{'repo_name': ..., 'file_path': ...}, ...]})
+            extract_contacts: Whether to extract contact information (default: False for speed)
 
         Usage:
             scraper = GitHubAPIScraper(token)
