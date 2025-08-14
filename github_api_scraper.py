@@ -757,14 +757,14 @@ class GitHubAPIScraper:
         
         results = {}
         for marker in ai_markers:
-            # Build the search query for the file path
+            # Build the search query for the file path (original working syntax)
             query = f'path:{marker}'
             if min_stars > 0:
                 query += f' stars:>={min_stars}'
             
             try:
                 self.check_rate_limit()
-                # Use the GitHub API to search for code files with the marker path
+                # Use the GitHub API to search for code files with the marker path (original working call)
                 code_results = self.github.search_code(query=query)
                 marker_hits = []
                 skipped_count = 0
@@ -800,6 +800,107 @@ class GitHubAPIScraper:
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
                 results[marker] = []
+        return results
+
+    def search_ai_code_generator_files_with_pagination(self, max_repos_per_pattern: int = 10, min_stars: int = 0, existing_data: dict = None) -> dict:
+        """
+        Search GitHub for repositories containing files that are markers for AI code generators.
+        This is a recreation of the original working method with added pagination support.
+        Skips existing results to get new data points.
+
+        Args:
+            max_repos_per_pattern: Maximum repositories to return per marker pattern.
+            min_stars: Minimum number of stars for repositories to include.
+            existing_data: Dictionary of existing results to skip (format: {marker: [{'repo_name': ..., 'file_path': ...}, ...]})
+
+        Usage:
+            scraper = GitHubAPIScraper(token)
+            results = scraper.search_ai_code_generator_files_with_pagination(existing_data=your_existing_data)
+        """
+        # List of AI code generator marker files to search for
+        ai_markers = [
+            '.claude',
+            '.cursor',
+            '.copilot',
+            '.tabnine',
+            '.codewhisperer',
+            '.codesnippets',
+            '.kite',
+            '.ai',
+            '.openai',
+            '.aicode',
+        ]
+        
+        # Create set of existing results for fast lookup
+        existing_set = set()
+        if existing_data:
+            for marker, hits in existing_data.items():
+                for hit in hits:
+                    existing_set.add((marker, hit['repo_name'], hit['file_path']))
+        
+        results = {}
+        for marker in ai_markers:
+            # Build the search query for the file path (original working syntax)
+            query = f'path:{marker}'
+            if min_stars > 0:
+                query += f' stars:>={min_stars}'
+            
+            try:
+                self.check_rate_limit()
+                # Use the GitHub API to search for code files with the marker path (original working call)
+                code_results = self.github.search_code(query=query)
+                marker_hits = []
+                skipped_count = 0
+                
+                # Process results with pagination support
+                page = 1
+                position = 0
+                
+                for file in code_results:
+                    if len(marker_hits) >= max_repos_per_pattern:
+                        break
+                    
+                    try:
+                        repo = file.repository
+                        # Check if this result already exists
+                        result_key = (marker, repo.full_name, file.path)
+                        if result_key in existing_set:
+                            skipped_count += 1
+                            position += 1
+                            continue  # Skip this result
+                        
+                        marker_hits.append({
+                            'repo_name': repo.full_name,
+                            'repo_url': repo.html_url,
+                            'file_path': file.path,
+                            'file_url': file.html_url,
+                            'stars': repo.stargazers_count,
+                            'description': repo.description,
+                            'owner_type': repo.owner.type,
+                            'owner_login': repo.owner.login,
+                            'scraping_page': page,
+                            'scraping_position': position + 1
+                        })
+                        position += 1
+                        
+                        # Add small delay between processing files
+                        time.sleep(0.1)
+                        
+                    except Exception as e:
+                        logger.warning(f"Error processing file hit for {marker}: {e}")
+                        position += 1
+                        continue
+                
+                results[marker] = marker_hits
+                logger.info(f"Found {len(marker_hits)} new repos/files for marker {marker} (skipped {skipped_count} existing)")
+                
+                # Add delay between markers
+                time.sleep(1.0)
+                
+            except Exception as e:
+                logger.error(f"Error searching for marker {marker}: {e}")
+                results[marker] = []
+        
         return results
 
     def _scrape_marker_with_pagination(self, marker: str, max_repos: int, min_stars: int, 
@@ -1002,9 +1103,6 @@ class GitHubAPIScraper:
             extract_contacts: Whether to extract contact information (default: False for speed)
         """
         
-        # Initialize state manager
-        with SessionLocal() as db_session:
-            state_manager = ScrapingStateManager(db_session)
         # List of AI code generator marker files to search for
         ai_markers = [
             '.claude',
@@ -1019,57 +1117,12 @@ class GitHubAPIScraper:
             '.aicode',
         ]
         
-        # Reduce markers if rate limit is low (single token scenario)
-        try:
-            rate_limit = self.github.get_rate_limit()
-            remaining = rate_limit.core.remaining
-            
-            if remaining < 2000:
-                # Only process top 1 marker if rate limit is very low
-                ai_markers = ai_markers[:1]
-                logger.info(f"Rate limit very low ({remaining}), processing only top 1 marker: {ai_markers}")
-            elif remaining < 3000:
-                # Only process top 2 markers if rate limit is low
-                ai_markers = ai_markers[:2]
-                logger.info(f"Rate limit low ({remaining}), processing only top 2 markers: {ai_markers}")
-            elif remaining < 4000:
-                # Only process top 3 markers if rate limit is moderate
-                ai_markers = ai_markers[:3]
-                logger.info(f"Rate limit moderate ({remaining}), processing only top 3 markers: {ai_markers}")
-        except Exception as e:
-            logger.warning(f"Error checking rate limit for marker reduction: {e}")
-        
-        # Track new repositories found in this run to prevent duplicates within the same run
-        new_repos_in_this_run = set()
-        
         # Track new repositories found for auto-population of top contributors
         new_repositories_found = set()
         
         total_new_records = 0
         total_repos_found = 0
         total_skipped = 0
-        
-        # Check if we should skip scraping due to rate limits
-        if self._should_skip_scraping_due_to_rate_limits():
-            logger.warning("Skipping scraping due to low rate limit")
-            return {
-                "total_new_records": 0,
-                "total_repos_found": 0,
-                "total_repos_checked": 0,
-                "new_repositories_found": 0,
-                "summary": "Skipped scraping due to rate limits"
-            }
-        
-        # Test search API before starting
-        if not self._test_search_api():
-            logger.error("Search API test failed. Skipping scraping.")
-            return {
-                "total_new_records": 0,
-                "total_repos_found": 0,
-                "total_repos_checked": 0,
-                "new_repositories_found": 0,
-                "summary": "Skipped scraping due to search API failure"
-            }
         
         # Load existing repositories for duplicate checking
         logger.info("Loading existing repositories for duplicate checking...")
@@ -1090,36 +1143,99 @@ class GitHubAPIScraper:
         
         for marker in ai_markers:
             try:
-                # Get current scraping state for this marker
-                current_state = state_manager.get_scraping_state(marker)
+                # Build the search query for the file path (original working syntax)
+                query = f'path:{marker}'
+                if min_stars > 0:
+                    query += f' stars:>={min_stars}'
                 
-                # Always start from the saved pagination state (simplified approach)
-                start_page = current_state['page']
-                start_position = current_state['position']
-                logger.info(f"Starting {marker} scraping from page {start_page}, position {start_position}")
+                logger.info(f"Searching for {marker} with query: {query}")
                 
-                # Scrape with pagination
-                result = self._scrape_marker_with_pagination(
-                    marker, max_repos_per_pattern, min_stars, extract_contacts,
-                    start_page, start_position, state_manager
-                )
+                self.check_rate_limit()
+                # Use the GitHub API to search for code files with the marker path (original working call)
+                code_results = self.github.search_code(query=query)
                 
-                # Update totals safely
-                if result and isinstance(result, dict):
-                    total_new_records += result.get('repos_found', 0)
-                    total_repos_found += result.get('total_repos_checked', 0)
-                    total_skipped += result.get('skipped_count', 0)
+                repos_found = 0
+                skipped_count = 0
+                
+                for file in code_results:
+                    if repos_found >= max_repos_per_pattern:
+                        break
                     
-                    # Update new repositories set for auto-population
-                    new_repos_from_result = result.get('new_repos', [])
-                    for repo_name in new_repos_from_result:
-                        new_repositories_found.add(repo_name)
-                        new_repos_in_this_run.add(repo_name)
-                else:
-                    logger.warning(f"No valid result returned for marker {marker}")
+                    try:
+                        repo = file.repository
+                        repo_name = repo.full_name
+                        total_repos_found += 1
+                        
+                        # Check if this repository already exists in database
+                        if repo_name in existing_repos:
+                            skipped_count += 1
+                            logger.debug(f"Skipping existing repository: {repo_name}")
+                            continue
+                        
+                        # Extract contact information for the repository owner (optional)
+                        if extract_contacts:
+                            owner_contacts = self.extract_contact_info(repo.owner.login)
+                            
+                            # If no contacts found in profile, try repository content
+                            if owner_contacts['source'] == 'none':
+                                repo_contacts = self.extract_contacts_from_repo_content(repo.full_name)
+                                if repo_contacts['source'] != 'none':
+                                    owner_contacts = repo_contacts
+                        else:
+                            owner_contacts = {'email': None, 'source': 'none'}
+                        
+                        # Get latest commit date for the repository (only if extract_contacts is True)
+                        latest_commit_date = None
+                        if extract_contacts:
+                            latest_commit_date = self.get_latest_commit_date(repo.full_name)
+                        
+                        # Create new record
+                        new_hit = MarkerHit(
+                            marker=marker,
+                            repo_name=repo.full_name,
+                            repo_url=repo.html_url,
+                            file_path=file.path,
+                            file_url=file.html_url,
+                            stars=repo.stargazers_count,
+                            description=repo.description,
+                            owner_type=repo.owner.type,
+                            owner_login=repo.owner.login,
+                            owner_email=owner_contacts['email'],
+                            contact_source=owner_contacts['source'],
+                            contact_extracted_at=datetime.utcnow().isoformat(),
+                            latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None
+                        )
+                        
+                        # Add to database
+                        with SessionLocal() as session:
+                            try:
+                                session.add(new_hit)
+                                session.commit()
+                                repos_found += 1
+                                total_new_records += 1
+                                new_repositories_found.add(repo_name)  # Track for auto-population
+                                logger.info(f"Added new repository: {marker} - {repo_name} - {repos_found}/{max_repos_per_pattern}")
+                            except IntegrityError:
+                                logger.debug(f"Repository already exists (race condition): {repo_name}")
+                                session.rollback()
+                                skipped_count += 1
+                            except Exception as e:
+                                logger.error(f"Error adding repository {repo_name}: {e}")
+                                session.rollback()
+                                continue
+                        
+                        # Rate limiting - small delay
+                        time.sleep(0.1)
+                        
+                    except Exception as e:
+                        logger.warning(f"Error processing file hit for {marker}: {e}")
+                        continue
                 
-                # Add delay between markers - reduced
-                time.sleep(5.0)
+                total_skipped += skipped_count
+                logger.info(f"Completed {marker}: found {repos_found} new repos, checked {len(list(code_results))}, skipped {skipped_count}")
+                
+                # Add delay between markers
+                time.sleep(1.0)
                     
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")

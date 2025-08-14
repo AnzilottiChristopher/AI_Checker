@@ -748,7 +748,7 @@ async def run_scraper(request: dict):
         # Run scraper with optimized parameters
         try:
             def run_scraper_operation():
-                return scraper.search_ai_code_generator_files_to_db(
+                return scraper.search_ai_code_generator_files_with_pagination(
                     max_repos_per_pattern=max_repos_per_pattern,
                     extract_contacts=extract_contacts
                 )
@@ -1011,7 +1011,7 @@ async def run_scraper_fast(request: dict):
         # Run scraper with high-throughput parameters
         try:
             def run_fast_scraper_operation():
-                return scraper.search_ai_code_generator_files_to_db(
+                return scraper.search_ai_code_generator_files_with_pagination(
                     max_repos_per_pattern=50,  # Find 50 new repos per marker for fast scraper
                     extract_contacts=False,  # Skip contact extraction for speed
                     min_stars=0  # Include all repos regardless of stars
