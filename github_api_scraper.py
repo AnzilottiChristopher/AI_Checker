@@ -327,9 +327,9 @@ class GitHubAPIScraper:
         
         # Rate limiting
         self.requests_made = 0
-        self.rate_limit_delay = 5.0  # Increased to 5 seconds between requests
-        self.secondary_rate_limit_delay = 30.0  # Increased to 30 seconds
-        self.search_api_delay = 10.0  # Increased to 10 seconds for search API calls
+        self.rate_limit_delay = 10.0  # Increased to 10 seconds between requests
+        self.secondary_rate_limit_delay = 60.0  # Increased to 60 seconds
+        self.search_api_delay = 20.0  # Increased to 20 seconds for search API calls
     
     def _initialize_with_token(self, token: str):
         """Initialize GitHub client and session with a specific token."""
@@ -649,19 +649,15 @@ class GitHubAPIScraper:
             )
             
             if results and hasattr(results, 'totalCount') and results.totalCount > 0:
-                first_file = results[0]
-                logger.info(f"First result for {marker}: {first_file.repository.full_name}")
-                return {
-                    'repo_name': first_file.repository.full_name,
-                    'file_path': first_file.path
-                }
-            elif results and len(results) > 0:
-                first_file = results[0]
-                logger.info(f"First result for {marker}: {first_file.repository.full_name}")
-                return {
-                    'repo_name': first_file.repository.full_name,
-                    'file_path': first_file.path
-                }
+                try:
+                    first_file = results[0]
+                    logger.info(f"First result for {marker}: {first_file.repository.full_name}")
+                    return {
+                        'repo_name': first_file.repository.full_name,
+                        'file_path': first_file.path
+                    }
+                except IndexError:
+                    logger.warning(f"No results found for {marker} (empty results)")
             else:
                 logger.warning(f"No results found for {marker} (API call may have failed)")
         except Exception as e:
@@ -696,10 +692,14 @@ class GitHubAPIScraper:
             
             if results and hasattr(results, 'totalCount'):
                 logger.info(f"Search query '{query}' page {page}: {results.totalCount} total results")
-                return list(results)
-            elif results:
-                logger.info(f"Search query '{query}' page {page}: {len(results)} results")
-                return list(results)
+                # Convert PaginatedList to regular list
+                try:
+                    results_list = list(results)
+                    logger.info(f"Search query '{query}' page {page}: {len(results_list)} results on this page")
+                    return results_list
+                except Exception as e:
+                    logger.error(f"Error converting PaginatedList to list: {e}")
+                    return []
             else:
                 logger.warning(f"Search query '{query}' page {page}: No results returned (API call may have failed)")
                 return []
@@ -955,9 +955,6 @@ class GitHubAPIScraper:
             if test_results and hasattr(test_results, 'totalCount'):
                 logger.info(f"Search API test successful: {test_results.totalCount} results for README.md")
                 return True
-            elif test_results and len(test_results) > 0:
-                logger.info(f"Search API test successful: {len(test_results)} results for README.md")
-                return True
             else:
                 logger.error("Search API test failed: No results returned")
                 return False
@@ -1002,18 +999,18 @@ class GitHubAPIScraper:
             rate_limit = self.github.get_rate_limit()
             remaining = rate_limit.core.remaining
             
-            if remaining < 1000:
-                # Only process top 2 markers if rate limit is very low
-                ai_markers = ai_markers[:2]
-                logger.info(f"Rate limit very low ({remaining}), processing only top 2 markers: {ai_markers}")
-            elif remaining < 2000:
-                # Only process top 3 markers if rate limit is low
-                ai_markers = ai_markers[:3]
-                logger.info(f"Rate limit low ({remaining}), processing only top 3 markers: {ai_markers}")
+            if remaining < 2000:
+                # Only process top 1 marker if rate limit is very low
+                ai_markers = ai_markers[:1]
+                logger.info(f"Rate limit very low ({remaining}), processing only top 1 marker: {ai_markers}")
             elif remaining < 3000:
-                # Only process top 5 markers if rate limit is moderate
-                ai_markers = ai_markers[:5]
-                logger.info(f"Rate limit moderate ({remaining}), processing only top 5 markers: {ai_markers}")
+                # Only process top 2 markers if rate limit is low
+                ai_markers = ai_markers[:2]
+                logger.info(f"Rate limit low ({remaining}), processing only top 2 markers: {ai_markers}")
+            elif remaining < 4000:
+                # Only process top 3 markers if rate limit is moderate
+                ai_markers = ai_markers[:3]
+                logger.info(f"Rate limit moderate ({remaining}), processing only top 3 markers: {ai_markers}")
         except Exception as e:
             logger.warning(f"Error checking rate limit for marker reduction: {e}")
         
@@ -1106,7 +1103,7 @@ class GitHubAPIScraper:
                     logger.warning(f"No valid result returned for marker {marker}")
                 
                 # Add delay between markers - increased significantly
-                time.sleep(10.0)
+                time.sleep(30.0)
                     
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
