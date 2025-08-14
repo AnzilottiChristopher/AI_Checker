@@ -1860,8 +1860,8 @@
                       displayResults(data.hits || [], 'New Data Results');
                   } else {
                       // If new endpoint fails (e.g., missing is_new column), fall back to original endpoint
-                      console.log('New endpoint failed, falling back to original query endpoint');
-                      response = await fetch(`${API_BASE}/query?${params}`);
+                              console.log('New endpoint failed, falling back to original hits endpoint');
+        response = await fetch(`${API_BASE}/hits?${params}`);
                       
                       if (response.ok) {
                           data = await response.json();
@@ -2550,8 +2550,8 @@
                   if (sortByFilter) params.append('sort_by', sortByFilter);
                   if (limitFilter) params.append('limit', limitFilter);
                   
-                  // Use the original query endpoint to get all historical data
-                  const response = await fetch(`${API_BASE}/query?${params}`);
+                          // Use the original hits endpoint to get all historical data
+        const response = await fetch(`${API_BASE}/hits?${params}`);
                   
                   if (response.ok) {
                       const data = await response.json();
