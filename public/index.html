@@ -1118,9 +1118,12 @@
                                     </button>
                                 </div>
                             </div>
-                            <button class="btn btn-outline" onclick="loadContactStats()" id="statsBtn">
-                                📊 Stats
-                            </button>
+                                                         <button class="btn btn-outline" onclick="loadContactStats()" id="statsBtn">
+                                 📊 Stats
+                             </button>
+                             <button class="btn btn-outline" onclick="loadAllHistoricalData()" id="historicalDataBtn">
+                                 📚 All Historical Data
+                             </button>
                         </div>
                         
                         <div id="queryResult"></div>
@@ -2514,8 +2517,65 @@
              }
          }
 
-         // Setup show more functionality
-         function setupShowMoreHandler() {
+                   // Load all historical data (existing database records)
+          async function loadAllHistoricalData() {
+              const historicalDataBtn = document.getElementById('historicalDataBtn');
+              const queryResult = document.getElementById('queryResult');
+              
+              if (!serverOnline) {
+                  showAlert('Server is offline. Please start the backend server.', 'error');
+                  return;
+              }
+              
+              // Disable button and show loading state
+              historicalDataBtn.disabled = true;
+              historicalDataBtn.innerHTML = '⏳ Loading...';
+              
+              try {
+                  // Get current filters
+                  const selectedMarkers = Array.from(document.querySelectorAll('#markerDropdown input[type="checkbox"]:checked:not(#selectAllMarkers)')).map(cb => cb.value);
+                  const ownerTypeFilter = document.getElementById('ownerTypeFilter').value;
+                  const hasEmailFilter = document.getElementById('hasEmailFilter').value;
+                  const hasTopContributorEmailFilter = document.getElementById('hasTopContributorEmailFilter').value;
+                  const sortByFilter = document.getElementById('sortByFilter').value;
+                  const limitFilter = document.getElementById('limitFilter').value;
+                  
+                  const params = new URLSearchParams();
+                  if (selectedMarkers.length > 0) {
+                      params.append('marker', selectedMarkers.join(','));
+                  }
+                  if (ownerTypeFilter) params.append('owner_type', ownerTypeFilter);
+                  if (hasEmailFilter) params.append('has_email', hasEmailFilter);
+                  if (hasTopContributorEmailFilter) params.append('has_top_contributor_email', hasTopContributorEmailFilter);
+                  if (sortByFilter) params.append('sort_by', sortByFilter);
+                  if (limitFilter) params.append('limit', limitFilter);
+                  
+                  // Use the original query endpoint to get all historical data
+                  const response = await fetch(`${API_BASE}/query?${params}`);
+                  
+                  if (response.ok) {
+                      const data = await response.json();
+                      
+                      // Display all historical data
+                      displayResults(data.hits || [], 'All Historical Data');
+                      
+                      showAlert('All historical data loaded successfully!', 'success');
+                  } else {
+                      const error = await response.json();
+                      throw new Error(`Failed to load historical data: ${error.detail}`);
+                  }
+                  
+              } catch (error) {
+                  showAlert(`Failed to load historical data: ${error.message}`, 'error');
+                  
+                  // Re-enable button on error
+                  historicalDataBtn.disabled = false;
+                  historicalDataBtn.innerHTML = '📚 All Historical Data';
+              }
+          }
+
+          // Setup show more functionality
+          function setupShowMoreHandler() {
             const showMoreBtn = document.getElementById('showMoreBtn');
             if (showMoreBtn) {
                 showMoreBtn.addEventListener('click', function() {
