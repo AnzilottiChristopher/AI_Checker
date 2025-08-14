@@ -1833,45 +1833,63 @@
                  if (sortByFilter) params.append('sort_by', sortByFilter);
                  if (limitFilter) params.append('limit', limitFilter);
 
-                                   // Try the new endpoint first, fall back to original if it fails
-                  let response = await fetch(`${API_BASE}/hits/new?${params}`);
-                  let data;
+                                                     // Try to get both new and historical data
+                  let newData = [];
+                  let historicalData = [];
+                  let hasNewData = false;
                   
-                  if (response.ok) {
-                      data = await response.json();
-                      
-                      // Debug: Log the first few results to verify sorting
-                      console.log('Query results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
-                          repo: item.repo_name,
-                          stars: item.stars
-                      })) : 'No hits data');
-                      
-                      // Debug: Check for duplicates in the received data
-                      const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
-                      const uniqueRepoNames = [...new Set(repoNames)];
-                      console.log('Total repositories received:', repoNames.length);
-                      console.log('Unique repositories:', uniqueRepoNames.length);
-                      if (repoNames.length !== uniqueRepoNames.length) {
-                          console.log('DUPLICATES DETECTED in received data!');
-                          const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
-                          console.log('Duplicate repo names:', [...new Set(duplicates)]);
+                  // First, try to get new data
+                  try {
+                      const newResponse = await fetch(`${API_BASE}/hits/new?${params}`);
+                      if (newResponse.ok) {
+                          const newDataResult = await newResponse.json();
+                          newData = newDataResult.hits || [];
+                          hasNewData = true;
+                          console.log('New data fetched:', newData.length, 'records');
                       }
-                      
-                      displayResults(data.hits || [], 'New Data Results');
-                  } else {
-                      // If new endpoint fails (e.g., missing is_new column), fall back to original endpoint
-                              console.log('New endpoint failed, falling back to original hits endpoint');
-        response = await fetch(`${API_BASE}/hits?${params}`);
-                      
-                      if (response.ok) {
-                          data = await response.json();
-                          displayResults(data.hits || [], 'Query Results (All Data)');
-                          showAlert('Note: Showing all data (new data feature not available yet)', 'info');
+                  } catch (error) {
+                      console.log('New data endpoint failed, will use historical data only');
+                  }
+                  
+                  // Then get historical data
+                  try {
+                      const historicalResponse = await fetch(`${API_BASE}/hits?${params}`);
+                      if (historicalResponse.ok) {
+                          const historicalDataResult = await historicalResponse.json();
+                          historicalData = historicalDataResult.hits || [];
+                          console.log('Historical data fetched:', historicalData.length, 'records');
                       } else {
-                          const error = await response.json();
-                          showAlert(`Query failed: ${error.detail}`, 'error');
+                          const error = await historicalResponse.json();
+                          throw new Error(`Failed to fetch historical data: ${error.detail}`);
+                      }
+                  } catch (error) {
+                      console.log('Historical data endpoint failed:', error.message);
+                      // If we have new data but no historical, just show new data
+                      if (hasNewData) {
+                          displayResults(newData, 'New Data Results');
+                          return;
+                      } else {
+                          throw error;
                       }
                   }
+                  
+                  // Combine and deduplicate data (new data takes priority)
+                  const combinedData = [...newData];
+                  const newRepoNames = new Set(newData.map(item => item.repo_name));
+                  
+                  // Add historical data that's not in new data
+                  historicalData.forEach(item => {
+                      if (!newRepoNames.has(item.repo_name)) {
+                          combinedData.push(item);
+                      }
+                  });
+                  
+                  console.log('Combined data:', combinedData.length, 'records');
+                  console.log('New data:', newData.length, 'records');
+                  console.log('Historical data (excluding duplicates):', combinedData.length - newData.length, 'records');
+                  
+                  // Display combined data with new data shown first, historical data hidden
+                  displayResultsWithHistorical(combinedData, newData, 'Query Results');
              } catch (error) {
                  showAlert(`Query failed: ${error.message}`, 'error');
              }
@@ -1978,8 +1996,234 @@
             }
         });
 
-        // Display results
-        function displayResults(data, title = 'Query Results') {
+                 // Display results with historical data in collapsible section
+         function displayResultsWithHistorical(allData, newData, title = 'Query Results') {
+             const queryResult = document.getElementById('queryResult');
+             
+             if (allData.length === 0) {
+                 queryResult.innerHTML = '<div class="alert alert-info">No results found.</div>';
+                 return;
+             }
+             
+             // Sort and categorize data based on top contributor and email presence
+             const prioritizedData = [];
+             const otherData = [];
+             
+             allData.forEach((item, index) => {
+                 const hasTopContributor = item.top_contributor && item.top_contributor !== 'N/A';
+                 const hasTopContributorEmail = item.top_contributor_email && item.top_contributor_email !== 'N/A';
+                 
+                 if (hasTopContributor && hasTopContributorEmail) {
+                     prioritizedData.push({ ...item, originalIndex: index });
+                 } else {
+                     otherData.push({ ...item, originalIndex: index });
+                 }
+             });
+             
+             // Separate new data from historical data
+             const newRepoNames = new Set(newData.map(item => item.repo_name));
+             const newDataItems = [];
+             const historicalDataItems = [];
+             
+             prioritizedData.forEach(item => {
+                 if (newRepoNames.has(item.repo_name)) {
+                     newDataItems.push(item);
+                 } else {
+                     historicalDataItems.push(item);
+                 }
+             });
+             
+             otherData.forEach(item => {
+                 if (newRepoNames.has(item.repo_name)) {
+                     newDataItems.push(item);
+                 } else {
+                     historicalDataItems.push(item);
+                 }
+             });
+             
+             let tableHTML = `
+                 <div style="margin-top: 1rem;">
+                     <h4>${title} (${allData.length} unique repositories)</h4>
+                     <p style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                         Showing unique repositories only. Each repository may contain multiple AI marker files.
+                     </p>
+                     <div style="margin-bottom: 1rem;">
+                         <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                             <input type="checkbox" id="selectAll" checked style="width: auto;">
+                             Select All
+                         </label>
+                     </div>
+                     <div class="table-wrapper">
+                         <table class="data-table">
+                             <thead>
+                                 <tr>
+                                     <th style="width: 40px;">✓</th>
+                                     <th>Marker</th>
+                                     <th>Repository</th>
+                                     <th>Owner</th>
+                                     <th>Stars</th>
+                                     <th>Latest Commit</th>
+                                     <th>Top Contributor</th>
+                                     <th>Top Contributor Email</th>
+                                     <th>Email</th>
+                                     <th>Description</th>
+                                 </tr>
+                             </thead>
+                             <tbody>
+             `;
+             
+             // Display new data first (prioritized entries)
+             const newPrioritized = newDataItems.filter(item => {
+                 const hasTopContributor = item.top_contributor && item.top_contributor !== 'N/A';
+                 const hasTopContributorEmail = item.top_contributor_email && item.top_contributor_email !== 'N/A';
+                 return hasTopContributor && hasTopContributorEmail;
+             });
+             
+             newPrioritized.forEach((item, index) => {
+                 const entryId = generateEntryId(item);
+                 const isExported = isEntryExported(entryId);
+                 const exportedClass = isExported ? 'exported-entry' : '';
+                 
+                 const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                 const topContributorEmail = item.top_contributor_email ? `<a href="mailto:${item.top_contributor_email}" class="email-link">${item.top_contributor_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                 const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
+                 const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
+                 
+                 tableHTML += `
+                     <tr class="${exportedClass} prioritized-entry new-data-entry">
+                         <td style="text-align: center;">
+                             <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
+                         </td>
+                         <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
+                         <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
+                         <td>${ownerInfo}</td>
+                         <td>⭐ ${item.stars || 0}</td>
+                         <td>${commitDate}</td>
+                         <td>${item.top_contributor || 'N/A'}</td>
+                         <td>${topContributorEmail}</td>
+                         <td>${email}</td>
+                         <td>${item.description || 'N/A'}</td>
+                     </tr>
+                 `;
+             });
+             
+             // Display new data (other entries)
+             const newOther = newDataItems.filter(item => {
+                 const hasTopContributor = item.top_contributor && item.top_contributor !== 'N/A';
+                 const hasTopContributorEmail = item.top_contributor_email && item.top_contributor_email !== 'N/A';
+                 return !(hasTopContributor && hasTopContributorEmail);
+             });
+             
+             newOther.forEach((item, index) => {
+                 const entryId = generateEntryId(item);
+                 const isExported = isEntryExported(entryId);
+                 const exportedClass = isExported ? 'exported-entry' : '';
+                 
+                 const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                 const topContributorEmail = item.top_contributor_email ? `<a href="mailto:${item.top_contributor_email}" class="email-link">${item.top_contributor_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                 const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
+                 const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
+                 
+                 tableHTML += `
+                     <tr class="${exportedClass} other-entry new-data-entry">
+                         <td style="text-align: center;">
+                             <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
+                         </td>
+                         <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
+                         <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
+                         <td>${ownerInfo}</td>
+                         <td>⭐ ${item.stars || 0}</td>
+                         <td>${commitDate}</td>
+                         <td>${item.top_contributor || 'N/A'}</td>
+                         <td>${topContributorEmail}</td>
+                         <td>${email}</td>
+                         <td>${item.description || 'N/A'}</td>
+                     </tr>
+                 `;
+             });
+             
+             // Add historical data section if there's historical data
+             if (historicalDataItems.length > 0) {
+                 tableHTML += `
+                     <tr class="show-more-header" style="background: hsl(var(--card-secondary));">
+                         <td colspan="10" style="text-align: center; padding: 1rem;">
+                             <button id="showHistoricalBtn" class="btn btn-secondary" style="width: 250px;">
+                                 📚 Show ${historicalDataItems.length} Historical Entries
+                             </button>
+                             <div id="showHistoricalSelectAll" style="display: none; margin-top: 0.5rem;">
+                                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                                     <input type="checkbox" id="selectAllHistorical" style="width: auto;">
+                                     Select All Historical Entries
+                                 </label>
+                             </div>
+                         </td>
+                     </tr>
+                 `;
+                 
+                 // Add hidden historical entries
+                 historicalDataItems.forEach((item, index) => {
+                     const entryId = generateEntryId(item);
+                     const isExported = isEntryExported(entryId);
+                     const exportedClass = isExported ? 'exported-entry' : '';
+                     
+                     const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                     const topContributorEmail = item.top_contributor_email ? `<a href="mailto:${item.top_contributor_email}" class="email-link">${item.top_contributor_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                     const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
+                     const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
+                     
+                     tableHTML += `
+                         <tr class="${exportedClass} historical-entry" style="display: none;">
+                             <td style="text-align: center;">
+                                 <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" style="width: auto;">
+                             </td>
+                             <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
+                             <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
+                             <td>${ownerInfo}</td>
+                             <td>⭐ ${item.stars || 0}</td>
+                             <td>${commitDate}</td>
+                             <td>${item.top_contributor || 'N/A'}</td>
+                             <td>${topContributorEmail}</td>
+                             <td>${email}</td>
+                             <td>${item.description || 'N/A'}</td>
+                         </tr>
+                     `;
+                 });
+             }
+             
+             tableHTML += `
+                 </tbody>
+             </table>
+         </div>
+         
+         <!-- Summary section -->
+         <div style="margin-top: 1rem; padding: 1rem; background: hsl(var(--card-secondary)); border-radius: var(--radius); border: 1px solid hsl(var(--border));">
+             <h5 style="margin-bottom: 0.5rem; color: hsl(var(--muted-foreground));">📊 Data Summary</h5>
+             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; font-size: 0.875rem;">
+                 <div>
+                     <strong>New Data:</strong> ${newData.length} repositories
+                 </div>
+                 <div>
+                     <strong>Historical Data:</strong> ${historicalDataItems.length} repositories
+                 </div>
+                 <div>
+                     <strong>Total:</strong> ${allData.length} repositories
+                 </div>
+             </div>
+         </div>
+     </div>
+ `;
+             
+             queryResult.innerHTML = tableHTML;
+             
+             // Add event listeners for checkboxes
+             setupCheckboxHandlers();
+             
+             // Add historical data show/hide functionality
+             setupHistoricalDataHandler();
+         }
+         
+         // Display results (original function for backward compatibility)
+         function displayResults(data, title = 'Query Results') {
             const queryResult = document.getElementById('queryResult');
             
             if (data.length === 0) {
@@ -2155,70 +2399,97 @@
             setupShowMoreHandler();
         }
 
-        // Setup checkbox handlers for select all functionality
-        function setupCheckboxHandlers() {
-            const selectAllCheckbox = document.getElementById('selectAll');
-            const selectAllOtherCheckbox = document.getElementById('selectAllOther');
-            const exportCheckboxes = document.querySelectorAll('.export-checkbox');
-            
-            // Main "Select All" checkbox - only affects prioritized entries (currently shown)
-            if (selectAllCheckbox) {
-                selectAllCheckbox.addEventListener('change', function() {
-                    const prioritizedCheckboxes = document.querySelectorAll('.prioritized-entry .export-checkbox');
-                    prioritizedCheckboxes.forEach(checkbox => {
-                        checkbox.checked = this.checked;
-                    });
-                    updateMainSelectAllState();
-                });
-            }
-            
-            // "Select All Other" checkbox - only affects other entries (hidden by default)
-            if (selectAllOtherCheckbox) {
-                selectAllOtherCheckbox.addEventListener('change', function() {
-                    const otherCheckboxes = document.querySelectorAll('.other-entry .export-checkbox');
-                    otherCheckboxes.forEach(checkbox => {
-                        checkbox.checked = this.checked;
-                    });
-                    updateOtherSelectAllState();
-                });
-            }
-            
-            // Update checkboxes when individual checkboxes change
-            exportCheckboxes.forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    updateMainSelectAllState();
-                    updateOtherSelectAllState();
-                });
-            });
-        }
+                 // Setup checkbox handlers for select all functionality
+         function setupCheckboxHandlers() {
+             const selectAllCheckbox = document.getElementById('selectAll');
+             const selectAllOtherCheckbox = document.getElementById('selectAllOther');
+             const selectAllHistoricalCheckbox = document.getElementById('selectAllHistorical');
+             const exportCheckboxes = document.querySelectorAll('.export-checkbox');
+             
+             // Main "Select All" checkbox - affects new data entries (currently shown)
+             if (selectAllCheckbox) {
+                 selectAllCheckbox.addEventListener('change', function() {
+                     const newDataCheckboxes = document.querySelectorAll('.new-data-entry .export-checkbox');
+                     newDataCheckboxes.forEach(checkbox => {
+                         checkbox.checked = this.checked;
+                     });
+                     updateMainSelectAllState();
+                 });
+             }
+             
+             // "Select All Other" checkbox - only affects other entries (hidden by default)
+             if (selectAllOtherCheckbox) {
+                 selectAllOtherCheckbox.addEventListener('change', function() {
+                     const otherCheckboxes = document.querySelectorAll('.other-entry .export-checkbox');
+                     otherCheckboxes.forEach(checkbox => {
+                         checkbox.checked = this.checked;
+                     });
+                     updateOtherSelectAllState();
+                 });
+             }
+             
+             // "Select All Historical" checkbox - affects historical entries
+             if (selectAllHistoricalCheckbox) {
+                 selectAllHistoricalCheckbox.addEventListener('change', function() {
+                     const historicalCheckboxes = document.querySelectorAll('.historical-entry .export-checkbox');
+                     historicalCheckboxes.forEach(checkbox => {
+                         checkbox.checked = this.checked;
+                     });
+                     updateHistoricalSelectAllState();
+                 });
+             }
+             
+             // Update checkboxes when individual checkboxes change
+             exportCheckboxes.forEach(checkbox => {
+                 checkbox.addEventListener('change', function() {
+                     updateMainSelectAllState();
+                     updateOtherSelectAllState();
+                     updateHistoricalSelectAllState();
+                 });
+             });
+         }
         
-        // Update main "Select All" checkbox state based on prioritized entries
-        function updateMainSelectAllState() {
-            const selectAllCheckbox = document.getElementById('selectAll');
-            const prioritizedCheckboxes = document.querySelectorAll('.prioritized-entry .export-checkbox');
-            
-            if (selectAllCheckbox && prioritizedCheckboxes.length > 0) {
-                const allChecked = Array.from(prioritizedCheckboxes).every(cb => cb.checked);
-                const anyChecked = Array.from(prioritizedCheckboxes).some(cb => cb.checked);
-                
-                selectAllCheckbox.checked = allChecked;
-                selectAllCheckbox.indeterminate = anyChecked && !allChecked;
-            }
-        }
-        
-        // Update "Select All Other" checkbox state based on other entries
-        function updateOtherSelectAllState() {
-            const selectAllOtherCheckbox = document.getElementById('selectAllOther');
-            const otherCheckboxes = document.querySelectorAll('.other-entry .export-checkbox');
-            
-            if (selectAllOtherCheckbox && otherCheckboxes.length > 0) {
-                const allChecked = Array.from(otherCheckboxes).every(cb => cb.checked);
-                const anyChecked = Array.from(otherCheckboxes).some(cb => cb.checked);
-                
-                selectAllOtherCheckbox.checked = allChecked;
-                selectAllOtherCheckbox.indeterminate = anyChecked && !allChecked;
-            }
-        }
+                 // Update main "Select All" checkbox state based on new data entries
+         function updateMainSelectAllState() {
+             const selectAllCheckbox = document.getElementById('selectAll');
+             const newDataCheckboxes = document.querySelectorAll('.new-data-entry .export-checkbox');
+             
+             if (selectAllCheckbox && newDataCheckboxes.length > 0) {
+                 const allChecked = Array.from(newDataCheckboxes).every(cb => cb.checked);
+                 const anyChecked = Array.from(newDataCheckboxes).some(cb => cb.checked);
+                 
+                 selectAllCheckbox.checked = allChecked;
+                 selectAllCheckbox.indeterminate = anyChecked && !allChecked;
+             }
+         }
+         
+         // Update "Select All Other" checkbox state based on other entries
+         function updateOtherSelectAllState() {
+             const selectAllOtherCheckbox = document.getElementById('selectAllOther');
+             const otherCheckboxes = document.querySelectorAll('.other-entry .export-checkbox');
+             
+             if (selectAllOtherCheckbox && otherCheckboxes.length > 0) {
+                 const allChecked = Array.from(otherCheckboxes).every(cb => cb.checked);
+                 const anyChecked = Array.from(otherCheckboxes).some(cb => cb.checked);
+                 
+                 selectAllOtherCheckbox.checked = allChecked;
+                 selectAllOtherCheckbox.indeterminate = anyChecked && !allChecked;
+             }
+         }
+         
+         // Update "Select All Historical" checkbox state based on historical entries
+         function updateHistoricalSelectAllState() {
+             const selectAllHistoricalCheckbox = document.getElementById('selectAllHistorical');
+             const historicalCheckboxes = document.querySelectorAll('.historical-entry .export-checkbox');
+             
+             if (selectAllHistoricalCheckbox && historicalCheckboxes.length > 0) {
+                 const allChecked = Array.from(historicalCheckboxes).every(cb => cb.checked);
+                 const anyChecked = Array.from(historicalCheckboxes).some(cb => cb.checked);
+                 
+                 selectAllHistoricalCheckbox.checked = allChecked;
+                 selectAllHistoricalCheckbox.indeterminate = anyChecked && !allChecked;
+             }
+         }
 
 
 
@@ -2574,8 +2845,50 @@
               }
           }
 
-          // Setup show more functionality
-          function setupShowMoreHandler() {
+                   // Setup historical data show/hide functionality
+         function setupHistoricalDataHandler() {
+             const showHistoricalBtn = document.getElementById('showHistoricalBtn');
+             if (showHistoricalBtn) {
+                 showHistoricalBtn.addEventListener('click', function() {
+                     const historicalEntries = document.querySelectorAll('.historical-entry');
+                     const showHistoricalHeader = document.querySelector('.show-more-header');
+                     const showHistoricalSelectAll = document.getElementById('showHistoricalSelectAll');
+                     
+                     if (historicalEntries.length > 0) {
+                         const isHidden = historicalEntries[0].style.display === 'none';
+                         
+                         if (isHidden) {
+                             // Show historical entries
+                             historicalEntries.forEach(entry => {
+                                 entry.style.display = '';
+                             });
+                             showHistoricalBtn.textContent = '📚 Hide Historical Entries';
+                             showHistoricalHeader.style.background = 'hsl(var(--success) / 0.1)';
+                             
+                             // Show the "Select All Historical" checkbox
+                             if (showHistoricalSelectAll) {
+                                 showHistoricalSelectAll.style.display = 'block';
+                             }
+                         } else {
+                             // Hide historical entries
+                             historicalEntries.forEach(entry => {
+                                 entry.style.display = 'none';
+                             });
+                             showHistoricalBtn.textContent = `📚 Show ${historicalEntries.length} Historical Entries`;
+                             showHistoricalHeader.style.background = 'hsl(var(--card-secondary))';
+                             
+                             // Hide the "Select All Historical" checkbox
+                             if (showHistoricalSelectAll) {
+                                 showHistoricalSelectAll.style.display = 'none';
+                             }
+                         }
+                     }
+                 });
+             }
+         }
+         
+         // Setup show more functionality (for original displayResults function)
+         function setupShowMoreHandler() {
             const showMoreBtn = document.getElementById('showMoreBtn');
             if (showMoreBtn) {
                 showMoreBtn.addEventListener('click', function() {
@@ -2617,4 +2930,5 @@
         }
     </script>
 </body>
+</html> 
 </html> 
