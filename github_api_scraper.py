@@ -327,9 +327,9 @@ class GitHubAPIScraper:
         
         # Rate limiting
         self.requests_made = 0
-        self.rate_limit_delay = 10.0  # Increased to 10 seconds between requests
-        self.secondary_rate_limit_delay = 60.0  # Increased to 60 seconds
-        self.search_api_delay = 20.0  # Increased to 20 seconds for search API calls
+        self.rate_limit_delay = 5.0  # Reduced to 5 seconds between requests
+        self.secondary_rate_limit_delay = 30.0  # Reduced to 30 seconds
+        self.search_api_delay = 10.0  # Reduced to 10 seconds for search API calls
     
     def _initialize_with_token(self, token: str):
         """Initialize GitHub client and session with a specific token."""
@@ -437,10 +437,13 @@ class GitHubAPIScraper:
         max_retries = 3  # Fixed number of retries regardless of token count
         retry_count = 0
         
+        logger.info(f"Making API call: {api_call_func.__name__} with args={args}, kwargs={kwargs}")
+        
         while retry_count < max_retries:
             try:
                 result = api_call_func(*args, **kwargs)
                 if result is not None:
+                    logger.info(f"API call successful: {api_call_func.__name__}")
                     return result
                 else:
                     logger.warning(f"API call returned None, retrying... (attempt {retry_count + 1})")
@@ -449,6 +452,7 @@ class GitHubAPIScraper:
                     continue
             except Exception as e:
                 error_msg = str(e)
+                logger.error(f"API call failed on attempt {retry_count + 1}: {error_msg}")
                 
                 # Check if this is a rate limit error
                 if "rate limit" in error_msg.lower() or "403" in error_msg:
@@ -638,6 +642,8 @@ class GitHubAPIScraper:
             if min_stars > 0:
                 query += f' stars:>={min_stars}'
             
+            logger.info(f"Searching for first result with query: '{query}'")
+            
             # Check rate limit and add delays
             self.check_rate_limit()
             time.sleep(self.search_api_delay)
@@ -648,18 +654,22 @@ class GitHubAPIScraper:
                 query=query, per_page=1
             )
             
-            if results and hasattr(results, 'totalCount') and results.totalCount > 0:
-                try:
-                    first_file = results[0]
-                    logger.info(f"First result for {marker}: {first_file.repository.full_name}")
-                    return {
-                        'repo_name': first_file.repository.full_name,
-                        'file_path': first_file.path
-                    }
-                except IndexError:
-                    logger.warning(f"No results found for {marker} (empty results)")
+            if results and hasattr(results, 'totalCount'):
+                logger.info(f"Search API returned: totalCount={results.totalCount}")
+                if results.totalCount > 0:
+                    try:
+                        first_file = results[0]
+                        logger.info(f"First result for {marker}: {first_file.repository.full_name}")
+                        return {
+                            'repo_name': first_file.repository.full_name,
+                            'file_path': first_file.path
+                        }
+                    except IndexError:
+                        logger.warning(f"No results found for {marker} (empty results)")
+                else:
+                    logger.warning(f"Search API returned 0 total results for query: '{query}'")
             else:
-                logger.warning(f"No results found for {marker} (API call may have failed)")
+                logger.warning(f"Search API call failed or returned None for query: '{query}'")
         except Exception as e:
             logger.warning(f"Error getting first result for {marker}: {e}")
         
@@ -680,6 +690,8 @@ class GitHubAPIScraper:
     def _get_search_results_page(self, query: str, page: int) -> List:
         """Get search results for a specific page"""
         try:
+            logger.info(f"Getting search results for query: '{query}' page {page}")
+            
             # Check rate limit and add delays
             self.check_rate_limit()
             time.sleep(self.search_api_delay)
@@ -1102,8 +1114,8 @@ class GitHubAPIScraper:
                 else:
                     logger.warning(f"No valid result returned for marker {marker}")
                 
-                # Add delay between markers - increased significantly
-                time.sleep(30.0)
+                # Add delay between markers - reduced
+                time.sleep(15.0)
                     
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
