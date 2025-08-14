@@ -340,6 +340,10 @@ class GitHubAPIScraper:
         # Throttling settings
         self.max_requests_per_second = 1.5  # Stay under 1.5 requests/sec for sustained periods
         self.burst_protection_delay = 5.0  # Additional delay after bursts
+        
+        # ETag caching for rate limit optimization
+        self.etag_cache = {}  # Cache ETags during session
+        self.cached_responses = {}  # Cache responses for 304 hits
     
     def _initialize_with_token(self, token: str):
         """Initialize GitHub client and session with a specific token."""
@@ -392,6 +396,104 @@ class GitHubAPIScraper:
         
         logger.debug(f"Smart delay for {operation_type}: {total_delay:.2f}s (base: {base_delay}s + random: {total_delay - base_delay:.2f}s)")
         time.sleep(total_delay)
+    
+    def _get_cache_key(self, operation: str, **kwargs) -> str:
+        """Generate a cache key for ETag caching."""
+        # Create a deterministic key based on operation and parameters
+        key_parts = [operation]
+        for k, v in sorted(kwargs.items()):
+            key_parts.append(f"{k}={v}")
+        return "|".join(key_parts)
+    
+    def _make_conditional_request(self, operation: str, api_call_func, *args, **kwargs):
+        """
+        Make a conditional API request using ETags to avoid unnecessary downloads.
+        
+        Args:
+            operation: Operation name for caching (e.g., 'search_code', 'get_repo')
+            api_call_func: Function that makes the API call
+            *args, **kwargs: Arguments to pass to the API call function
+            
+        Returns:
+            The result of the API call, or cached result if 304
+        """
+        cache_key = self._get_cache_key(operation, **kwargs)
+        
+        # Check if we have a cached ETag for this request
+        if cache_key in self.etag_cache:
+            etag = self.etag_cache[cache_key]
+            logger.debug(f"Using cached ETag for {operation}: {etag[:20]}...")
+            
+            # Add ETag to request headers
+            headers = {"If-None-Match": etag}
+            
+            try:
+                # Make conditional request
+                if hasattr(api_call_func, '__self__') and hasattr(api_call_func.__self__, 'session'):
+                    # For session-based requests
+                    response = api_call_func.__self__.session.get(
+                        api_call_func.__self__.url, 
+                        headers=headers
+                    )
+                else:
+                    # For direct API calls, we need to handle this differently
+                    # Since PyGithub doesn't directly support conditional requests
+                    # We'll fall back to normal request but log the attempt
+                    logger.debug(f"Conditional request not supported for {operation}, using normal request")
+                    result = api_call_func(*args, **kwargs)
+                    return result
+                
+                if response.status_code == 304:
+                    # Resource hasn't changed - use cached response
+                    logger.info(f"ETag cache hit for {operation} - saved rate limit!")
+                    cached_result = self.cached_responses.get(cache_key)
+                    if cached_result:
+                        return cached_result
+                    else:
+                        logger.warning(f"304 response but no cached data for {operation}")
+                        return None
+                        
+                elif response.status_code == 200:
+                    # Resource has changed - update cache
+                    new_etag = response.headers.get("ETag")
+                    if new_etag:
+                        self.etag_cache[cache_key] = new_etag
+                        logger.debug(f"Updated ETag for {operation}: {new_etag[:20]}...")
+                    
+                    # Parse and cache the response
+                    try:
+                        result = response.json()
+                        self.cached_responses[cache_key] = result
+                        return result
+                    except Exception as e:
+                        logger.warning(f"Error parsing response for {operation}: {e}")
+                        return None
+                        
+            except Exception as e:
+                logger.warning(f"Conditional request failed for {operation}: {e}")
+                # Fall back to normal request
+                pass
+        
+        # No cached ETag or conditional request failed - make normal request
+        try:
+            result = api_call_func(*args, **kwargs)
+            
+            # Try to extract ETag from the result if possible
+            if hasattr(result, 'etag'):
+                self.etag_cache[cache_key] = result.etag
+                logger.debug(f"Cached new ETag for {operation}: {result.etag[:20]}...")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"API call failed for {operation}: {e}")
+            return None
+    
+    def _clear_etag_cache(self):
+        """Clear the ETag cache (useful between different scraping sessions)."""
+        self.etag_cache.clear()
+        self.cached_responses.clear()
+        logger.info("ETag cache cleared")
     
     def _rotate_token(self):
         """Rotate to the next available token (only if backup tokens exist)."""
@@ -691,7 +793,7 @@ class GitHubAPIScraper:
         return re.match(r'\.(py|js|jsx|ts|tsx|java|cpp|cc|cxx|hpp|h|c|cs|go|rs|php|rb|swift|kt|scala|m|mm|pl|r|sql|sh|bash|ps1|vbs|lua|dart|elm|clj|hs|ml|fs|pas|ada|cob|for|f90|jl|nim)$', filename, re.IGNORECASE) is not None
 
     def _get_first_search_result(self, marker: str, min_stars: int = 0) -> Optional[dict]:
-        """Get just the first search result to check if we should resume"""
+        """Get just the first search result to check if we should resume with ETag caching"""
         try:
             # Use path search (original working syntax)
             query = f'path:{marker}'
@@ -704,8 +806,10 @@ class GitHubAPIScraper:
             self.check_rate_limit()
             self._smart_delay("search")
             
-            # Use retry mechanism for search API calls
-            results = self._make_api_call_with_retry(
+            # Use conditional request with ETag caching
+            results = self._make_conditional_request(
+                "search_code_first",
+                self._make_api_call_with_retry,
                 self.github.search_code, 
                 query=query, per_page=1
             )
@@ -744,7 +848,7 @@ class GitHubAPIScraper:
             return False
 
     def _get_search_results_page(self, query: str, page: int) -> List:
-        """Get search results for a specific page"""
+        """Get search results for a specific page with ETag caching"""
         try:
             logger.info(f"Getting search results for query: '{query}' page {page}")
             
@@ -752,8 +856,10 @@ class GitHubAPIScraper:
             self.check_rate_limit()
             self._smart_delay("search")
             
-            # Use retry mechanism for search API calls
-            results = self._make_api_call_with_retry(
+            # Use conditional request with ETag caching
+            results = self._make_conditional_request(
+                "search_code",
+                self._make_api_call_with_retry,
                 self.github.search_code, 
                 query=query, per_page=30, page=page
             )
@@ -819,8 +925,12 @@ class GitHubAPIScraper:
             
             try:
                 self.check_rate_limit()
-                # Use the GitHub API to search for code files with the marker path (original working call)
-                code_results = self.github.search_code(query=query)
+                # Use conditional request with ETag caching for search
+                code_results = self._make_conditional_request(
+                    "search_code_marker",
+                    self.github.search_code,
+                    query=query
+                )
                 marker_hits = []
                 skipped_count = 0
                 
@@ -873,6 +983,9 @@ class GitHubAPIScraper:
             scraper = GitHubAPIScraper(token)
             results = scraper.search_ai_code_generator_files_with_pagination(existing_data=your_existing_data)
         """
+        
+        # Clear ETag cache at the start of each scraping session
+        self._clear_etag_cache()
         # List of AI code generator marker files to search for
         ai_markers = [
             '.claude',
@@ -919,8 +1032,12 @@ class GitHubAPIScraper:
             
             try:
                 self.check_rate_limit()
-                # Use the GitHub API to search for code files with the marker path (original working call)
-                code_results = self.github.search_code(query=query)
+                # Use conditional request with ETag caching for search
+                code_results = self._make_conditional_request(
+                    "search_code_marker_pagination",
+                    self.github.search_code,
+                    query=query
+                )
                 
                 repos_found = 0
                 skipped_count = 0
@@ -1238,6 +1355,9 @@ class GitHubAPIScraper:
             extract_contacts: Whether to extract contact information (default: False for speed)
         """
         
+        # Clear ETag cache at the start of each scraping session
+        self._clear_etag_cache()
+        
         # List of AI code generator marker files to search for
         ai_markers = [
             '.claude',
@@ -1286,8 +1406,12 @@ class GitHubAPIScraper:
                 logger.info(f"Searching for {marker} with query: {query}")
                 
                 self.check_rate_limit()
-                # Use the GitHub API to search for code files with the marker path (original working call)
-                code_results = self.github.search_code(query=query)
+                # Use conditional request with ETag caching for search
+                code_results = self._make_conditional_request(
+                    "search_code_to_db",
+                    self.github.search_code,
+                    query=query
+                )
                 
                 repos_found = 0
                 skipped_count = 0
@@ -1396,6 +1520,9 @@ class GitHubAPIScraper:
             except Exception as e:
                 logger.error(f"Error auto-populating top contributors: {e}")
                 # Don't fail the entire scraping process if auto-population fails
+        
+        # Log ETag cache statistics
+        logger.info(f"ETag cache entries: {len(self.etag_cache)}")
         
         return {
             "total_new_records": total_new_records,
