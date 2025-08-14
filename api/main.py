@@ -728,9 +728,12 @@ async def run_scraper(request: dict):
             for i, token in enumerate(backup_tokens):
                 logging.info(f"Backup token {i+1} (first 8 chars: {token[:8]}...)")
         
-        # Initialize database
+        # Initialize database and run migrations
         try:
             init_database()
+            # Run migration to add pagination columns
+            from github_api_scraper import migrate_database
+            migrate_database()
         except Exception as e:
             logging.error(f"Database initialization error: {e}")
             raise HTTPException(status_code=500, detail=f"Database initialization failed: {str(e)}")
@@ -793,8 +796,11 @@ async def update_commit_dates(request: dict, db: Session = Depends(get_db)):
             for i, token in enumerate(backup_tokens):
                 logging.info(f"Backup token {i+1} (first 8 chars: {token[:8]}...)")
         
-        # Initialize database
+        # Initialize database and run migrations
         init_database()
+        # Run migration to add pagination columns
+        from github_api_scraper import migrate_database
+        migrate_database()
         
         # Create scraper instance with token rotation support
         scraper = GitHubAPIScraper(github_token, backup_tokens)
@@ -903,6 +909,73 @@ async def test_github_token(request: dict):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Token test error: {str(e)}")
+
+@app.get("/api/scraping-state/{marker}")
+async def get_scraping_state(marker: str, db: Session = Depends(get_db)):
+    """Get current scraping state for a marker"""
+    try:
+        from github_api_scraper import ScrapingStateManager
+        
+        state_manager = ScrapingStateManager(db)
+        state = state_manager.get_scraping_state(marker)
+        
+        return {
+            "marker": marker,
+            "state": state,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error getting scraping state for {marker}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting scraping state: {str(e)}")
+
+@app.post("/api/scraping-state/{marker}/reset")
+async def reset_scraping_state(marker: str, db: Session = Depends(get_db)):
+    """Reset scraping state for a marker (start fresh)"""
+    try:
+        from github_api_scraper import ScrapingStateManager
+        
+        state_manager = ScrapingStateManager(db)
+        state_manager.reset_scraping_state(marker)
+        
+        return {
+            "marker": marker,
+            "message": f"Reset scraping state for {marker}",
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error resetting scraping state for {marker}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error resetting scraping state: {str(e)}")
+
+@app.get("/api/scraping-state")
+async def get_all_scraping_states(db: Session = Depends(get_db)):
+    """Get scraping state for all markers"""
+    try:
+        from github_api_scraper import ScrapingStateManager, MarkerHit
+        
+        # Get all markers that have scraping state
+        state_records = db.query(MarkerHit).filter(
+            MarkerHit.scraping_page.isnot(None),
+            MarkerHit.repo_name.like("STATE_TRACKING_%")
+        ).all()
+        
+        states = {}
+        for record in state_records:
+            marker = record.marker
+            states[marker] = {
+                'page': record.scraping_page,
+                'position': record.scraping_position,
+                'last_repo': record.repo_name.replace(f"STATE_TRACKING_{marker}", ""),
+                'last_updated': record.last_scraped_at.isoformat() if record.last_scraped_at else None
+            }
+        
+        return {
+            "states": states,
+            "total_markers": len(states),
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error getting all scraping states: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting scraping states: {str(e)}")
 
 @app.post("/api/run-scraper-fast")
 async def run_scraper_fast(request: dict):

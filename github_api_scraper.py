@@ -73,6 +73,10 @@ class MarkerHit(Base):
     # Top contributor fields
     top_contributor = Column(String, index=True)
     top_contributor_email = Column(String)
+    # Pagination tracking fields
+    scraping_page = Column(Integer)
+    scraping_position = Column(Integer)
+    last_scraped_at = Column(DateTime, default=datetime.utcnow)
     
     # Add unique constraint to prevent duplicates
     __table_args__ = (
@@ -107,24 +111,46 @@ def migrate_database():
                     SELECT column_name 
                     FROM information_schema.columns 
                     WHERE table_name = 'marker_hits' 
-                    AND column_name IN ('top_contributor', 'top_contributor_email')
+                    AND column_name IN ('top_contributor', 'top_contributor_email', 'scraping_page', 'scraping_position', 'last_scraped_at')
                 """)).fetchall()
                 
                 existing_columns = [row[0] for row in result]
                 logger.info(f"Existing columns found: {existing_columns}")
                 
+                # Check for top contributor columns
                 if 'top_contributor' in existing_columns and 'top_contributor_email' in existing_columns:
-                    logger.info("All columns already exist, migration not needed")
-                    return True
-            
-            # Add the new columns using raw SQL
-            logger.info("Adding top_contributor column...")
-            session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor VARCHAR"))
-            logger.info("top_contributor column added")
-            
-            logger.info("Adding top_contributor_email column...")
-            session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor_email VARCHAR"))
-            logger.info("top_contributor_email column added")
+                    logger.info("Top contributor columns already exist")
+                else:
+                    # Add the top contributor columns using raw SQL
+                    if 'top_contributor' not in existing_columns:
+                        logger.info("Adding top_contributor column...")
+                        session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor VARCHAR"))
+                        logger.info("top_contributor column added")
+                    
+                    if 'top_contributor_email' not in existing_columns:
+                        logger.info("Adding top_contributor_email column...")
+                        session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS top_contributor_email VARCHAR"))
+                        logger.info("top_contributor_email column added")
+                
+                # Check for pagination columns
+                if 'scraping_page' in existing_columns and 'scraping_position' in existing_columns and 'last_scraped_at' in existing_columns:
+                    logger.info("Pagination columns already exist")
+                else:
+                    # Add the pagination columns using raw SQL
+                    if 'scraping_page' not in existing_columns:
+                        logger.info("Adding scraping_page column...")
+                        session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS scraping_page INTEGER"))
+                        logger.info("scraping_page column added")
+                    
+                    if 'scraping_position' not in existing_columns:
+                        logger.info("Adding scraping_position column...")
+                        session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS scraping_position INTEGER"))
+                        logger.info("scraping_position column added")
+                    
+                    if 'last_scraped_at' not in existing_columns:
+                        logger.info("Adding last_scraped_at column...")
+                        session.execute(text("ALTER TABLE marker_hits ADD COLUMN IF NOT EXISTS last_scraped_at TIMESTAMP"))
+                        logger.info("last_scraped_at column added")
             
             logger.info("Committing changes...")
             session.commit()
@@ -132,7 +158,7 @@ def migrate_database():
             
             # Verify the new columns exist
             logger.info("Verifying new columns...")
-            result = session.execute(text("SELECT top_contributor, top_contributor_email FROM marker_hits LIMIT 1")).fetchall()
+            result = session.execute(text("SELECT top_contributor, top_contributor_email, scraping_page, scraping_position, last_scraped_at FROM marker_hits LIMIT 1")).fetchall()
             logger.info(f"New columns verified successfully. Result: {result}")
             return True
             
@@ -141,6 +167,99 @@ def migrate_database():
         logger.error(f"Error type: {type(e)}")
         logger.error(f"Error details: {str(e)}")
         return False
+
+class ScrapingStateManager:
+    """Manages pagination state for scraping operations."""
+    
+    def __init__(self, db_session):
+        self.db = db_session
+    
+    def get_scraping_state(self, marker: str) -> dict:
+        """Get current scraping state for a marker"""
+        try:
+            # Query the most recent record for this marker to get pagination state
+            latest_record = self.db.query(MarkerHit).filter(
+                MarkerHit.marker == marker,
+                MarkerHit.scraping_page.isnot(None)
+            ).order_by(MarkerHit.last_scraped_at.desc()).first()
+            
+            if latest_record:
+                return {
+                    'page': latest_record.scraping_page,
+                    'position': latest_record.scraping_position,
+                    'last_repo': latest_record.repo_name,
+                    'last_updated': latest_record.last_scraped_at
+                }
+            
+            # No pagination state exists - check if we have any data for this marker
+            existing_count = self.db.query(MarkerHit).filter(
+                MarkerHit.marker == marker
+            ).count()
+            
+            if existing_count > 0:
+                logger.info(f"Found {existing_count} existing records for {marker}, starting fresh pagination")
+            
+            return {'page': 1, 'position': 0, 'last_repo': None, 'last_updated': None}
+            
+        except Exception as e:
+            logger.error(f"Error getting scraping state for {marker}: {e}")
+            return {'page': 1, 'position': 0, 'last_repo': None, 'last_updated': None}
+    
+    def update_scraping_state(self, marker: str, page: int, position: int, repo_name: str):
+        """Update scraping state by creating a state tracking record"""
+        try:
+            # Create a state tracking record
+            state_record = MarkerHit(
+                marker=marker,
+                repo_name=f"STATE_TRACKING_{marker}",  # Special identifier
+                repo_url="",
+                file_path="",
+                file_url="",
+                stars=0,
+                description="",
+                owner_type="",
+                owner_login="",
+                scraping_page=page,
+                scraping_position=position,
+                last_scraped_at=datetime.utcnow()
+            )
+            
+            try:
+                self.db.add(state_record)
+                self.db.commit()
+                logger.debug(f"Updated scraping state for {marker}: page {page}, position {position}")
+            except IntegrityError:
+                # If duplicate, update existing state record
+                existing = self.db.query(MarkerHit).filter(
+                    MarkerHit.marker == marker,
+                    MarkerHit.repo_name == f"STATE_TRACKING_{marker}"
+                ).first()
+                if existing:
+                    existing.scraping_page = page
+                    existing.scraping_position = position
+                    existing.last_scraped_at = datetime.utcnow()
+                    self.db.commit()
+                    logger.debug(f"Updated existing scraping state for {marker}: page {page}, position {position}")
+                    
+        except Exception as e:
+            logger.error(f"Error updating scraping state for {marker}: {e}")
+            self.db.rollback()
+    
+    def reset_scraping_state(self, marker: str):
+        """Reset scraping state for a marker (start fresh)"""
+        try:
+            # Delete existing state tracking record
+            self.db.query(MarkerHit).filter(
+                MarkerHit.marker == marker,
+                MarkerHit.repo_name == f"STATE_TRACKING_{marker}"
+            ).delete()
+            self.db.commit()
+            logger.info(f"Reset scraping state for {marker}")
+        except Exception as e:
+            logger.error(f"Error resetting scraping state for {marker}: {e}")
+            self.db.rollback()
+
+
 
 @dataclass
 class FileAnalysis:
@@ -482,6 +601,50 @@ class GitHubAPIScraper:
         
         return re.match(r'\.(py|js|jsx|ts|tsx|java|cpp|cc|cxx|hpp|h|c|cs|go|rs|php|rb|swift|kt|scala|m|mm|pl|r|sql|sh|bash|ps1|vbs|lua|dart|elm|clj|hs|ml|fs|pas|ada|cob|for|f90|jl|nim)$', filename, re.IGNORECASE) is not None
 
+    def _get_first_search_result(self, marker: str, min_stars: int = 0) -> Optional[dict]:
+        """Get just the first search result to check if we should resume"""
+        try:
+            query = f'path:{marker}'
+            if min_stars > 0:
+                query += f' stars:>={min_stars}'
+            
+            self.check_rate_limit()
+            results = self.github.search_code(query=query, per_page=1)
+            
+            if results.totalCount > 0:
+                first_file = results[0]
+                return {
+                    'repo_name': first_file.repository.full_name,
+                    'file_path': first_file.path
+                }
+        except Exception as e:
+            logger.warning(f"Error getting first result for {marker}: {e}")
+        
+        return None
+
+    def _is_repo_in_database(self, repo_name: str) -> bool:
+        """Check if repository already exists in database"""
+        try:
+            with SessionLocal() as session:
+                existing = session.query(MarkerHit).filter(
+                    MarkerHit.repo_name == repo_name
+                ).first()
+                return existing is not None
+        except Exception as e:
+            logger.error(f"Error checking if repo {repo_name} exists in database: {e}")
+            return False
+
+    def _get_search_results_page(self, query: str, page: int) -> List:
+        """Get search results for a specific page"""
+        try:
+            self.check_rate_limit()
+            # GitHub API uses 1-based page numbers
+            results = self.github.search_code(query=query, per_page=30, page=page)
+            return list(results)
+        except Exception as e:
+            logger.error(f"Error getting page {page} for query '{query}': {e}")
+            return []
+
     def search_ai_code_generator_files(self, max_repos_per_pattern: int = 10, min_stars: int = 0, existing_data: dict = None) -> dict:
         """
         Search GitHub for repositories containing files that are markers for AI code generators.
@@ -564,6 +727,138 @@ class GitHubAPIScraper:
                 results[marker] = []
         return results
 
+    def _scrape_marker_with_pagination(self, marker: str, max_repos: int, min_stars: int, 
+                                      extract_contacts: bool, start_page: int, 
+                                      start_position: int, state_manager: ScrapingStateManager) -> dict:
+        """Scrape a specific marker with pagination support"""
+        
+        current_page = start_page
+        current_position = start_position
+        repos_found = 0
+        total_repos_checked = 0
+        skipped_count = 0
+        
+        # Build search query
+        query = f'path:{marker}'
+        if min_stars > 0:
+            query += f' stars:>={min_stars}'
+        
+        logger.info(f"Starting paginated scraping for {marker} from page {start_page}, position {start_position}")
+        
+        while repos_found < max_repos:
+            try:
+                # Get search results for current page
+                search_results = self._get_search_results_page(query, current_page)
+                
+                if not search_results:
+                    logger.info(f"No more results for {marker} at page {current_page}")
+                    break
+                
+                logger.info(f"Processing page {current_page} for {marker} ({len(search_results)} results)")
+                
+                # Process results starting from current position
+                for i, file in enumerate(search_results):
+                    if i < current_position:
+                        continue  # Skip already processed results
+                    
+                    if repos_found >= max_repos:
+                        break
+                    
+                    total_repos_checked += 1
+                    
+                    try:
+                        repo = file.repository
+                        repo_name = repo.full_name
+                        
+                        # Check if this repository already exists in database
+                        if self._is_repo_in_database(repo_name):
+                            skipped_count += 1
+                            logger.debug(f"Skipping existing repository: {repo_name}")
+                        else:
+                            # Extract contact information for the repository owner (optional)
+                            if extract_contacts:
+                                owner_contacts = self.extract_contact_info(repo.owner.login)
+                                
+                                # If no contacts found in profile, try repository content
+                                if owner_contacts['source'] == 'none':
+                                    repo_contacts = self.extract_contacts_from_repo_content(repo.full_name)
+                                    if repo_contacts['source'] != 'none':
+                                        owner_contacts = repo_contacts
+                            else:
+                                owner_contacts = {'email': None, 'source': 'none'}
+                            
+                            # Get latest commit date for the repository (only if extract_contacts is True)
+                            latest_commit_date = None
+                            if extract_contacts:
+                                latest_commit_date = self.get_latest_commit_date(repo.full_name)
+                            
+                            # Create new record
+                            new_hit = MarkerHit(
+                                marker=marker,
+                                repo_name=repo.full_name,
+                                repo_url=repo.html_url,
+                                file_path=file.path,
+                                file_url=file.html_url,
+                                stars=repo.stargazers_count,
+                                description=repo.description,
+                                owner_type=repo.owner.type,
+                                owner_login=repo.owner.login,
+                                owner_email=owner_contacts['email'],
+                                contact_source=owner_contacts['source'],
+                                contact_extracted_at=datetime.utcnow().isoformat(),
+                                latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None,
+                                scraping_page=current_page,
+                                scraping_position=i + 1
+                            )
+                            
+                            # Add to database
+                            with SessionLocal() as session:
+                                try:
+                                    session.add(new_hit)
+                                    session.commit()
+                                    repos_found += 1
+                                    logger.info(f"Added new repository: {marker} - {repo_name} (page {current_page}, position {i+1}) - {repos_found}/{max_repos}")
+                                except IntegrityError:
+                                    logger.debug(f"Repository already exists (race condition): {repo_name}")
+                                    session.rollback()
+                                    skipped_count += 1
+                                except Exception as e:
+                                    logger.error(f"Error adding repository {repo_name}: {e}")
+                                    session.rollback()
+                                    continue
+                        
+                        # Update state after each result (whether added or skipped)
+                        current_position = i + 1
+                        state_manager.update_scraping_state(marker, current_page, current_position, repo_name)
+                        
+                        # Rate limiting
+                        time.sleep(0.05)
+                        
+                    except Exception as e:
+                        logger.warning(f"Error processing file hit for {marker}: {e}")
+                        continue
+                
+                # Move to next page
+                current_page += 1
+                current_position = 0
+                
+                # Add delay between pages
+                time.sleep(0.2)
+                
+            except Exception as e:
+                logger.error(f"Error scraping {marker} at page {current_page}: {e}")
+                break
+        
+        logger.info(f"Completed paginated scraping for {marker}: found {repos_found} new repos, checked {total_repos_checked}, skipped {skipped_count}")
+        
+        return {
+            "repos_found": repos_found,
+            "total_repos_checked": total_repos_checked,
+            "skipped_count": skipped_count,
+            "final_page": current_page,
+            "final_position": current_position
+        }
+
     def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0, extract_contacts: bool = False) -> dict:
         """
         Search GitHub for repositories containing files that are markers for AI code generators
@@ -577,6 +872,10 @@ class GitHubAPIScraper:
             min_stars: Minimum number of stars for repositories to include.
             extract_contacts: Whether to extract contact information (default: False for speed)
         """
+        
+        # Initialize state manager
+        with SessionLocal() as db_session:
+            state_manager = ScrapingStateManager(db_session)
         # List of AI code generator marker files to search for
         ai_markers = [
             '.claude',
@@ -619,247 +918,41 @@ class GitHubAPIScraper:
                 existing_repos = set()
         
         for marker in ai_markers:
-            # Build the search query for the file path
-            query = f'path:{marker}'
-            if min_stars > 0:
-                query += f' stars:>={min_stars}'
-            
             try:
-                self.check_rate_limit()
-                # Use the GitHub API to search for code files with the marker path
-                code_results = self._make_api_call_with_retry(
-                    self.github.search_code, 
-                    query=query
+                # Get current scraping state for this marker
+                current_state = state_manager.get_scraping_state(marker)
+                
+                # Check if first result is already in database
+                first_result = self._get_first_search_result(marker, min_stars)
+                
+                if first_result and self._is_repo_in_database(first_result['repo_name']):
+                    # Resume from last known position
+                    start_page = current_state['page']
+                    start_position = current_state['position']
+                    logger.info(f"Resuming {marker} scraping from page {start_page}, position {start_position}")
+                else:
+                    # Start fresh - new data available
+                    start_page = 1
+                    start_position = 0
+                    logger.info(f"Starting fresh {marker} scraping")
+                
+                # Scrape with pagination
+                result = self._scrape_marker_with_pagination(
+                    marker, max_repos_per_pattern, min_stars, extract_contacts,
+                    start_page, start_position, state_manager
                 )
                 
-                if code_results is None:
-                    logger.error(f"Failed to search for marker {marker} after all retries")
-                    continue
+                # Update totals
+                total_new_records += result['repos_found']
+                total_repos_found += result['total_repos_checked']
+                total_skipped += result['skipped_count']
                 
-                processed_count = 0
-                records_to_commit = []  # Reset batch for each marker
-                skipped_count = 0
-                
-                for file in code_results:
-                    # Check if we've already found enough NEW repositories for this marker
-                    if processed_count >= max_repos_per_pattern:
-                        logger.info(f"Found {max_repos_per_pattern} new repos for marker {marker}, stopping search")
-                        break
-                        
-                    try:
-                        repo = file.repository
-                        total_repos_found += 1
-                        
-                        # Log progress every 50 repositories checked
-                        if total_repos_found % 50 == 0:
-                            logger.info(f"Checked {total_repos_found} total repos, found {total_new_records} new ones so far")
-                        
-                        # Check if this repository already exists in database OR in this run
-                        repo_name = repo.full_name
-                        if repo_name in existing_repos:
-                            skipped_count += 1
-                            total_skipped += 1
-                            logger.debug(f"Skipping existing repository: {repo_name}")
-                            continue  # Skip this repository and continue searching
-                        elif repo_name in new_repos_in_this_run:
-                            skipped_count += 1
-                            total_skipped += 1
-                            logger.debug(f"Skipping duplicate repository from this run: {repo_name}")
-                            continue  # Skip this repository and continue searching
-                        
-                        # Extract contact information for the repository owner (optional)
-                        if extract_contacts:
-                            owner_contacts = self.extract_contact_info(repo.owner.login)
-                            
-                            # If no contacts found in profile, try repository content
-                            if owner_contacts['source'] == 'none':
-                                repo_contacts = self.extract_contacts_from_repo_content(repo.full_name)
-                                if repo_contacts['source'] != 'none':
-                                    owner_contacts = repo_contacts
-                        else:
-                            owner_contacts = {'email': None, 'source': 'none'}
-                        
-                        # Get latest commit date for the repository (only if extract_contacts is True)
-                        latest_commit_date = None
-                        if extract_contacts:
-                            latest_commit_date = self.get_latest_commit_date(repo.full_name)
-                        
-                        # Create new record without specifying ID (let database auto-increment)
-                        new_hit = MarkerHit(
-                            marker=marker,
-                            repo_name=repo.full_name,
-                            repo_url=repo.html_url,
-                            file_path=file.path,
-                            file_url=file.html_url,
-                            stars=repo.stargazers_count,
-                            description=repo.description,
-                            owner_type=repo.owner.type,
-                            owner_login=repo.owner.login,
-                            owner_email=owner_contacts['email'],
-                            contact_source=owner_contacts['source'],
-                            contact_extracted_at=datetime.utcnow().isoformat(),
-                            latest_commit_date=latest_commit_date.isoformat() if latest_commit_date else None
-                        )
-                        
-                        # Add to batch instead of immediate commit
-                        records_to_commit.append(new_hit)
-                        
-                        # Add to tracking sets to prevent duplicates
-                        new_repos_in_this_run.add(repo_name)
-                        existing_repos.add(repo_name)  # Update existing set for this run
-                        
-                        # Track new repository for auto-population
-                        new_repositories_found.add(repo_name)
-                        
-                        processed_count += 1
-                        
-                        # Commit in smaller batches for better resource management
-                        if len(records_to_commit) >= 10:  # Reduced from 25 to 10
-                            try:
-                                # Use a fresh session for each batch commit
-                                with SessionLocal() as batch_session:
-                                    batch_session.add_all(records_to_commit)
-                                    batch_session.commit()
-                                    total_new_records += len(records_to_commit)
-                                    logger.info(f"Committed batch of {len(records_to_commit)} records")
-                            except IntegrityError as e:
-                                logger.warning(f"IntegrityError in batch commit (likely duplicate): {e}")
-                                # Try individual commits as fallback with better error handling
-                                successful_commits = 0
-                                with SessionLocal() as fallback_session:
-                                    for record in records_to_commit:
-                                        try:
-                                            # Double-check if repository already exists before inserting
-                                            existing = fallback_session.query(MarkerHit).filter(
-                                                MarkerHit.repo_name == record.repo_name
-                                            ).first()
-                                            
-                                            if existing:
-                                                logger.debug(f"Repository already exists, skipping: {record.repo_name}")
-                                                continue
-                                            
-                                            fallback_session.add(record)
-                                            fallback_session.commit()
-                                            successful_commits += 1
-                                        except IntegrityError as individual_error:
-                                            logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
-                                            fallback_session.rollback()
-                                            continue
-                                        except Exception as individual_error:
-                                            logger.error(f"Failed to commit individual record: {individual_error}")
-                                            fallback_session.rollback()
-                                            continue
-                                
-                                total_new_records += successful_commits
-                                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
-                            except Exception as e:
-                                logger.error(f"Error committing batch: {e}")
-                                # Try individual commits as fallback with better error handling
-                                successful_commits = 0
-                                with SessionLocal() as fallback_session:
-                                    for record in records_to_commit:
-                                        try:
-                                            # Double-check if repository already exists before inserting
-                                            existing = fallback_session.query(MarkerHit).filter(
-                                                MarkerHit.repo_name == record.repo_name
-                                            ).first()
-                                            
-                                            if existing:
-                                                logger.debug(f"Repository already exists, skipping: {record.repo_name}")
-                                                continue
-                                            
-                                            fallback_session.add(record)
-                                            fallback_session.commit()
-                                            successful_commits += 1
-                                        except Exception as individual_error:
-                                            logger.error(f"Failed to commit individual record: {individual_error}")
-                                            fallback_session.rollback()
-                                            continue
-                                
-                                total_new_records += successful_commits
-                                logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in fallback mode")
-                            
-                            records_to_commit = []  # Clear the batch
-                        
-                        logger.info(f"Added new repository to DB: {marker} - {repo_name} (file: {file.path}, contacts: {owner_contacts['source']}) - {processed_count}/{max_repos_per_pattern}")
-                        
-                        # Reduced delay to respect rate limits (from 100ms to 50ms)
-                        time.sleep(0.05)  # 50ms delay between requests
-                        
-                    except Exception as e:
-                        logger.warning(f"Error processing file hit for {marker}: {e}")
-                        continue
-                
-                # Commit any remaining records for this marker
-                if records_to_commit:
-                    try:
-                        with SessionLocal() as final_session:
-                            final_session.add_all(records_to_commit)
-                            final_session.commit()
-                            total_new_records += len(records_to_commit)
-                            logger.info(f"Committed final batch of {len(records_to_commit)} records for marker {marker}")
-                    except IntegrityError as e:
-                        logger.warning(f"IntegrityError in final batch commit for marker {marker} (likely duplicate): {e}")
-                        # Try individual commits as fallback
-                        successful_commits = 0
-                        with SessionLocal() as fallback_session:
-                            for record in records_to_commit:
-                                try:
-                                    existing = fallback_session.query(MarkerHit).filter(
-                                        MarkerHit.repo_name == record.repo_name
-                                    ).first()
-                                    
-                                    if existing:
-                                        logger.debug(f"Repository already exists, skipping: {record.repo_name}")
-                                        continue
-                                    
-                                    fallback_session.add(record)
-                                    fallback_session.commit()
-                                    successful_commits += 1
-                                except IntegrityError as individual_error:
-                                    logger.debug(f"IntegrityError for individual record (duplicate): {individual_error}")
-                                    fallback_session.rollback()
-                                    continue
-                                except Exception as individual_error:
-                                    logger.error(f"Failed to commit individual record: {individual_error}")
-                                    fallback_session.rollback()
-                                    continue
-                        
-                        total_new_records += successful_commits
-                        logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode for marker {marker}")
-                    except Exception as e:
-                        logger.error(f"Error committing final batch for marker {marker}: {e}")
-                        # Try individual commits as fallback
-                        successful_commits = 0
-                        with SessionLocal() as fallback_session:
-                            for record in records_to_commit:
-                                try:
-                                    existing = fallback_session.query(MarkerHit).filter(
-                                        MarkerHit.repo_name == record.repo_name
-                                    ).first()
-                                    
-                                    if existing:
-                                        logger.debug(f"Repository already exists, skipping: {record.repo_name}")
-                                        continue
-                                    
-                                    fallback_session.add(record)
-                                    fallback_session.commit()
-                                    successful_commits += 1
-                                except Exception as individual_error:
-                                    logger.error(f"Failed to commit individual record: {individual_error}")
-                                    fallback_session.rollback()
-                                    continue
-                        
-                        total_new_records += successful_commits
-                        logger.info(f"Successfully committed {successful_commits} out of {len(records_to_commit)} records in final fallback mode for marker {marker}")
-                
-                logger.info(f"Processed {processed_count} hits for marker {marker} (skipped {skipped_count} duplicates)")
-                
-                # Reduced delay between markers (from 500ms to 200ms)
-                time.sleep(0.2)  # 200ms delay between markers
-                
+                # Add delay between markers
+                time.sleep(0.2)
+                    
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
+                continue
         
         logger.info(f"=== SCRAPING SUMMARY ===")
         logger.info(f"Total repositories checked: {total_repos_found}")
