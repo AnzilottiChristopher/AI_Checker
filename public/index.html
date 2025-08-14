@@ -1830,33 +1830,45 @@
                  if (sortByFilter) params.append('sort_by', sortByFilter);
                  if (limitFilter) params.append('limit', limitFilter);
 
-                 // Use the new endpoint to get only new data by default
-                 const response = await fetch(`${API_BASE}/hits/new?${params}`);
-                 if (response.ok) {
-                     const data = await response.json();
-                     
-                     // Debug: Log the first few results to verify sorting
-                     console.log('Query results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
-                         repo: item.repo_name,
-                         stars: item.stars
-                     })) : 'No hits data');
-                     
-                     // Debug: Check for duplicates in the received data
-                     const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
-                     const uniqueRepoNames = [...new Set(repoNames)];
-                     console.log('Total repositories received:', repoNames.length);
-                     console.log('Unique repositories:', uniqueRepoNames.length);
-                     if (repoNames.length !== uniqueRepoNames.length) {
-                         console.log('DUPLICATES DETECTED in received data!');
-                         const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
-                         console.log('Duplicate repo names:', [...new Set(duplicates)]);
-                     }
-                     
-                     displayResults(data.hits || [], 'New Data Results');
-                 } else {
-                     const error = await response.json();
-                     showAlert(`Query failed: ${error.detail}`, 'error');
-                 }
+                                   // Try the new endpoint first, fall back to original if it fails
+                  let response = await fetch(`${API_BASE}/hits/new?${params}`);
+                  let data;
+                  
+                  if (response.ok) {
+                      data = await response.json();
+                      
+                      // Debug: Log the first few results to verify sorting
+                      console.log('Query results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
+                          repo: item.repo_name,
+                          stars: item.stars
+                      })) : 'No hits data');
+                      
+                      // Debug: Check for duplicates in the received data
+                      const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
+                      const uniqueRepoNames = [...new Set(repoNames)];
+                      console.log('Total repositories received:', repoNames.length);
+                      console.log('Unique repositories:', uniqueRepoNames.length);
+                      if (repoNames.length !== uniqueRepoNames.length) {
+                          console.log('DUPLICATES DETECTED in received data!');
+                          const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
+                          console.log('Duplicate repo names:', [...new Set(duplicates)]);
+                      }
+                      
+                      displayResults(data.hits || [], 'New Data Results');
+                  } else {
+                      // If new endpoint fails (e.g., missing is_new column), fall back to original endpoint
+                      console.log('New endpoint failed, falling back to original query endpoint');
+                      response = await fetch(`${API_BASE}/query?${params}`);
+                      
+                      if (response.ok) {
+                          data = await response.json();
+                          displayResults(data.hits || [], 'Query Results (All Data)');
+                          showAlert('Note: Showing all data (new data feature not available yet)', 'info');
+                      } else {
+                          const error = await response.json();
+                          showAlert(`Query failed: ${error.detail}`, 'error');
+                      }
+                  }
              } catch (error) {
                  showAlert(`Query failed: ${error.message}`, 'error');
              }
