@@ -737,6 +737,7 @@ class GitHubAPIScraper:
         repos_found = 0
         total_repos_checked = 0
         skipped_count = 0
+        new_repos_found = set()  # Track new repositories for auto-population
         
         # Build search query
         query = f'path:{marker}'
@@ -817,6 +818,7 @@ class GitHubAPIScraper:
                                     session.add(new_hit)
                                     session.commit()
                                     repos_found += 1
+                                    new_repos_found.add(repo_name)  # Track for auto-population
                                     logger.info(f"Added new repository: {marker} - {repo_name} (page {current_page}, position {i+1}) - {repos_found}/{max_repos}")
                                 except IntegrityError:
                                     logger.debug(f"Repository already exists (race condition): {repo_name}")
@@ -856,7 +858,8 @@ class GitHubAPIScraper:
             "total_repos_checked": total_repos_checked,
             "skipped_count": skipped_count,
             "final_page": current_page,
-            "final_position": current_position
+            "final_position": current_position,
+            "new_repos": list(new_repos_found) if 'new_repos_found' in locals() else []
         }
 
     def search_ai_code_generator_files_to_db(self, max_repos_per_pattern: int = 10, min_stars: int = 0, extract_contacts: bool = False) -> dict:
@@ -942,10 +945,19 @@ class GitHubAPIScraper:
                     start_page, start_position, state_manager
                 )
                 
-                # Update totals
-                total_new_records += result['repos_found']
-                total_repos_found += result['total_repos_checked']
-                total_skipped += result['skipped_count']
+                # Update totals safely
+                if result and isinstance(result, dict):
+                    total_new_records += result.get('repos_found', 0)
+                    total_repos_found += result.get('total_repos_checked', 0)
+                    total_skipped += result.get('skipped_count', 0)
+                    
+                    # Update new repositories set for auto-population
+                    new_repos_from_result = result.get('new_repos', [])
+                    for repo_name in new_repos_from_result:
+                        new_repositories_found.add(repo_name)
+                        new_repos_in_this_run.add(repo_name)
+                else:
+                    logger.warning(f"No valid result returned for marker {marker}")
                 
                 # Add delay between markers
                 time.sleep(0.2)
@@ -958,7 +970,13 @@ class GitHubAPIScraper:
         logger.info(f"Total repositories checked: {total_repos_found}")
         logger.info(f"New unique repositories found: {total_new_records}")
         logger.info(f"Repositories skipped (already in DB): {total_skipped}")
-        logger.info(f"Success rate: {total_new_records/(total_repos_found+total_skipped)*100:.1f}% new repos found")
+        # Calculate success rate safely to avoid division by zero
+        total_checked = total_repos_found + total_skipped
+        if total_checked > 0:
+            success_rate = (total_new_records / total_checked) * 100
+            logger.info(f"Success rate: {success_rate:.1f}% new repos found")
+        else:
+            logger.info("Success rate: N/A (no repositories checked)")
         
         # Auto-populate top contributors for new repositories
         if new_repositories_found and total_new_records > 0:
