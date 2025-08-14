@@ -8,12 +8,13 @@ import json
 import time
 import requests
 import math
+import random
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 from urllib.parse import urljoin, urlparse
 from pathlib import Path
-from collections import Counter
+from collections import Counter, deque
 import sqlalchemy
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, func, UniqueConstraint, text
 from sqlalchemy.ext.declarative import declarative_base
@@ -325,11 +326,20 @@ class GitHubAPIScraper:
             self.session = requests.Session()
             logger.warning("GitHub API initialized without token - limited rate limits")
         
-        # Rate limiting
+        # Rate limiting with random delays and throttling
         self.requests_made = 0
-        self.rate_limit_delay = 2.0  # Reduced to 2 seconds between requests
-        self.secondary_rate_limit_delay = 15.0  # Reduced to 15 seconds
-        self.search_api_delay = 3.0  # Reduced to 3 seconds for search API calls
+        self.request_times = deque(maxlen=60)  # Track last 60 requests for rolling average
+        self.rate_limit_delay = 2.0  # Base delay between requests
+        self.secondary_rate_limit_delay = 15.0  # Base delay for secondary rate limits
+        self.search_api_delay = 3.0  # Base delay for search API calls
+        
+        # Random delay ranges (in seconds)
+        self.min_random_delay = 0.5
+        self.max_random_delay = 3.0
+        
+        # Throttling settings
+        self.max_requests_per_second = 1.5  # Stay under 1.5 requests/sec for sustained periods
+        self.burst_protection_delay = 5.0  # Additional delay after bursts
     
     def _initialize_with_token(self, token: str):
         """Initialize GitHub client and session with a specific token."""
@@ -337,6 +347,51 @@ class GitHubAPIScraper:
         self.session = requests.Session()
         self.session.headers.update({'Authorization': f'token {token}'})
         self.current_token = token
+    
+    def _get_random_delay(self, base_delay: float = 0.0) -> float:
+        """Generate a random delay to avoid predictable patterns."""
+        random_delay = random.uniform(self.min_random_delay, self.max_random_delay)
+        total_delay = base_delay + random_delay
+        return total_delay
+    
+    def _check_request_throttling(self):
+        """Check if we need to throttle requests based on recent activity."""
+        current_time = time.time()
+        self.request_times.append(current_time)
+        
+        # Calculate requests per second over the last 60 requests
+        if len(self.request_times) >= 2:
+            time_window = current_time - self.request_times[0]
+            requests_in_window = len(self.request_times)
+            requests_per_second = requests_in_window / time_window if time_window > 0 else 0
+            
+            # If we're exceeding our rate limit, add extra delay
+            if requests_per_second > self.max_requests_per_second:
+                extra_delay = self.burst_protection_delay
+                logger.debug(f"Throttling: {requests_per_second:.2f} req/sec > {self.max_requests_per_second}, adding {extra_delay}s delay")
+                time.sleep(extra_delay)
+                return True
+        
+        return False
+    
+    def _smart_delay(self, operation_type: str = "general"):
+        """Apply smart delays with random components to avoid rate limits."""
+        # Check throttling first
+        self._check_request_throttling()
+        
+        # Choose base delay based on operation type
+        if operation_type == "search":
+            base_delay = self.search_api_delay
+        elif operation_type == "rate_limit":
+            base_delay = self.rate_limit_delay
+        else:
+            base_delay = self.rate_limit_delay
+        
+        # Add random component
+        total_delay = self._get_random_delay(base_delay)
+        
+        logger.debug(f"Smart delay for {operation_type}: {total_delay:.2f}s (base: {base_delay}s + random: {total_delay - base_delay:.2f}s)")
+        time.sleep(total_delay)
     
     def _rotate_token(self):
         """Rotate to the next available token (only if backup tokens exist)."""
@@ -393,13 +448,13 @@ class GitHubAPIScraper:
             return False
     
     def check_rate_limit(self):
-        """Check and handle GitHub API rate limits. Sleeps if close to limit."""
+        """Check and handle GitHub API rate limits with smart delays."""
         try:
             rate_limit = self.github.get_rate_limit()
             remaining = rate_limit.core.remaining
             limit = rate_limit.core.limit
             
-                    # Log rate limit status to verify token is working
+            # Log rate limit status to verify token is working
             if self.primary_token:
                 logger.info(f"Rate limit: {remaining}/{limit} remaining (authenticated)")
             else:
@@ -414,14 +469,14 @@ class GitHubAPIScraper:
                 time.sleep(sleep_time)
             elif remaining < 500:  # More conservative threshold
                 logger.info(f"Rate limit getting low ({remaining} remaining). Adding delay...")
-                time.sleep(5.0)  # Increased delay
+                self._smart_delay("rate_limit")
             else:
-                # Always add a delay to prevent secondary rate limits
-                time.sleep(2.0)
+                # Always add a smart delay to prevent secondary rate limits
+                self._smart_delay("rate_limit")
         except Exception as e:
             logger.warning(f"Error checking rate limit: {e}")
             # If we can't check rate limit, add a conservative delay
-            time.sleep(2)  # Increased delay
+            self._smart_delay("rate_limit")
     
     def _make_api_call_with_retry(self, api_call_func, *args, **kwargs):
         """
@@ -645,9 +700,9 @@ class GitHubAPIScraper:
             
             logger.info(f"Searching for first result with query: '{query}'")
             
-            # Check rate limit and add delays
+            # Check rate limit and add smart delays
             self.check_rate_limit()
-            time.sleep(self.search_api_delay)
+            self._smart_delay("search")
             
             # Use retry mechanism for search API calls
             results = self._make_api_call_with_retry(
@@ -693,9 +748,9 @@ class GitHubAPIScraper:
         try:
             logger.info(f"Getting search results for query: '{query}' page {page}")
             
-            # Check rate limit and add delays
+            # Check rate limit and add smart delays
             self.check_rate_limit()
-            time.sleep(self.search_api_delay)
+            self._smart_delay("search")
             
             # Use retry mechanism for search API calls
             results = self._make_api_call_with_retry(
@@ -1089,8 +1144,8 @@ class GitHubAPIScraper:
                         current_position = i + 1
                         state_manager.update_scraping_state(marker, current_page, current_position, repo_name)
                         
-                        # Rate limiting - increased delay
-                        time.sleep(0.2)
+                        # Rate limiting - smart delay
+                        self._smart_delay("general")
                         
                     except Exception as e:
                         logger.warning(f"Error processing file hit for {marker}: {e}")
@@ -1100,8 +1155,8 @@ class GitHubAPIScraper:
                 current_page += 1
                 current_position = 0
                 
-                # Add delay between pages - increased
-                time.sleep(1.0)
+                # Add smart delay between pages
+                self._smart_delay("search")
                 
             except Exception as e:
                 logger.error(f"Error scraping {marker} at page {current_page}: {e}")
@@ -1304,8 +1359,8 @@ class GitHubAPIScraper:
                                 session.rollback()
                                 continue
                         
-                        # Rate limiting - small delay
-                        time.sleep(0.1)
+                        # Rate limiting - smart delay
+                        self._smart_delay("general")
                         
                     except Exception as e:
                         logger.warning(f"Error processing file hit for {marker}: {e}")
@@ -1314,8 +1369,8 @@ class GitHubAPIScraper:
                 total_skipped += skipped_count
                 logger.info(f"Completed {marker}: found {repos_found} new repos, checked {len(list(code_results))}, skipped {skipped_count}")
                 
-                # Add delay between markers
-                time.sleep(1.0)
+                # Add smart delay between markers
+                self._smart_delay("search")
                     
             except Exception as e:
                 logger.error(f"Error searching for marker {marker}: {e}")
