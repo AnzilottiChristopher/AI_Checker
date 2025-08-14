@@ -967,6 +967,18 @@ class GitHubAPIScraper:
             
             if test_results and hasattr(test_results, 'totalCount'):
                 logger.info(f"Search API test successful: {test_results.totalCount} results for README.md")
+                
+                # Also test with a hidden file pattern
+                hidden_test = self._make_api_call_with_retry(
+                    self.github.search_code,
+                    query="path:.gitignore", per_page=1
+                )
+                
+                if hidden_test and hasattr(hidden_test, 'totalCount'):
+                    logger.info(f"Hidden file test: {hidden_test.totalCount} results for .gitignore")
+                else:
+                    logger.warning("Hidden file search returned no results")
+                
                 return True
             else:
                 logger.error("Search API test failed: No results returned")
