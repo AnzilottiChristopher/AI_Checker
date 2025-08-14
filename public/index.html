@@ -1833,63 +1833,35 @@
                  if (sortByFilter) params.append('sort_by', sortByFilter);
                  if (limitFilter) params.append('limit', limitFilter);
 
-                                                     // Try to get both new and historical data
-                  let newData = [];
-                  let historicalData = [];
-                  let hasNewData = false;
-                  
-                  // First, try to get new data
-                  try {
-                      const newResponse = await fetch(`${API_BASE}/hits/new?${params}`);
-                      if (newResponse.ok) {
-                          const newDataResult = await newResponse.json();
-                          newData = newDataResult.hits || [];
-                          hasNewData = true;
-                          console.log('New data fetched:', newData.length, 'records');
-                      }
-                  } catch (error) {
-                      console.log('New data endpoint failed, will use historical data only');
-                  }
-                  
-                  // Then get historical data
-                  try {
-                      const historicalResponse = await fetch(`${API_BASE}/hits?${params}`);
-                      if (historicalResponse.ok) {
-                          const historicalDataResult = await historicalResponse.json();
-                          historicalData = historicalDataResult.hits || [];
-                          console.log('Historical data fetched:', historicalData.length, 'records');
-                      } else {
-                          const error = await historicalResponse.json();
-                          throw new Error(`Failed to fetch historical data: ${error.detail}`);
-                      }
-                  } catch (error) {
-                      console.log('Historical data endpoint failed:', error.message);
-                      // If we have new data but no historical, just show new data
-                      if (hasNewData) {
-                          displayResults(newData, 'New Data Results');
-                          return;
-                      } else {
-                          throw error;
-                      }
-                  }
-                  
-                  // Combine and deduplicate data (new data takes priority)
-                  const combinedData = [...newData];
-                  const newRepoNames = new Set(newData.map(item => item.repo_name));
-                  
-                  // Add historical data that's not in new data
-                  historicalData.forEach(item => {
-                      if (!newRepoNames.has(item.repo_name)) {
-                          combinedData.push(item);
-                      }
-                  });
-                  
-                  console.log('Combined data:', combinedData.length, 'records');
-                  console.log('New data:', newData.length, 'records');
-                  console.log('Historical data (excluding duplicates):', combinedData.length - newData.length, 'records');
-                  
-                  // Display combined data with new data shown first, historical data hidden
-                  displayResultsWithHistorical(combinedData, newData, 'Query Results');
+                                                                      // Try to get data from the hits endpoint
+                 let response = await fetch(`${API_BASE}/hits?${params}`);
+                 let data;
+                 
+                 if (response.ok) {
+                     data = await response.json();
+                     
+                     // Debug: Log the first few results to verify sorting
+                     console.log('Query results (first 5):', data.hits ? data.hits.slice(0, 5).map(item => ({
+                         repo: item.repo_name,
+                         stars: item.stars
+                     })) : 'No hits data');
+                     
+                     // Debug: Check for duplicates in the received data
+                     const repoNames = data.hits ? data.hits.map(item => item.repo_name) : [];
+                     const uniqueRepoNames = [...new Set(repoNames)];
+                     console.log('Total repositories received:', repoNames.length);
+                     console.log('Unique repositories:', uniqueRepoNames.length);
+                     if (repoNames.length !== uniqueRepoNames.length) {
+                         console.log('DUPLICATES DETECTED in received data!');
+                         const duplicates = repoNames.filter((item, index) => repoNames.indexOf(item) !== index);
+                         console.log('Duplicate repo names:', [...new Set(duplicates)]);
+                     }
+                     
+                     displayResults(data.hits || [], 'Query Results');
+                 } else {
+                     const error = await response.json();
+                     showAlert(`Query failed: ${error.detail}`, 'error');
+                 }
              } catch (error) {
                  showAlert(`Query failed: ${error.message}`, 'error');
              }
@@ -2222,101 +2194,176 @@
              setupHistoricalDataHandler();
          }
          
-         // Display results (original function for backward compatibility)
+                  // Display results (original function for backward compatibility)
          function displayResults(data, title = 'Query Results') {
-            const queryResult = document.getElementById('queryResult');
-            
-            if (data.length === 0) {
-                queryResult.innerHTML = '<div class="alert alert-info">No results found.</div>';
-                return;
-            }
+             const queryResult = document.getElementById('queryResult');
+             
+             // Always show the table structure, even if no data
+             let tableHTML = `
+                 <div style="margin-top: 1rem;">
+                     <h4>${title} (${data.length} unique repositories)</h4>
+                     <p style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                         Showing unique repositories only. Each repository may contain multiple AI marker files.
+                     </p>
+                     <div style="margin-bottom: 1rem;">
+                         <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                             <input type="checkbox" id="selectAll" checked style="width: auto;">
+                             Select All
+                         </label>
+                     </div>
+                     <div class="table-wrapper">
+                         <table class="data-table">
+                             <thead>
+                                 <tr>
+                                     <th style="width: 40px;">✓</th>
+                                     <th>Marker</th>
+                                     <th>Repository</th>
+                                     <th>Owner</th>
+                                     <th>Stars</th>
+                                     <th>Latest Commit</th>
+                                     <th>Top Contributor</th>
+                                     <th>Top Contributor Email</th>
+                                     <th>Email</th>
+                                     <th>Description</th>
+                                 </tr>
+                             </thead>
+                             <tbody>
+             `;
+             
+             if (data.length === 0) {
+                 tableHTML += `
+                     <tr>
+                         <td colspan="10" style="text-align: center; padding: 2rem; color: hsl(var(--muted-foreground));">
+                             <div style="font-size: 1.125rem; margin-bottom: 0.5rem;">📭 No results found</div>
+                             <div style="font-size: 0.875rem;">Try adjusting your filters or running the scraper to collect more data.</div>
+                         </td>
+                     </tr>
+                 `;
+             } else {
+                 // Sort and categorize data based on top contributor and email presence
+                 const prioritizedData = [];
+                 const otherData = [];
+                 
+                 data.forEach((item, index) => {
+                     const hasTopContributor = item.top_contributor && item.top_contributor !== 'N/A';
+                     const hasTopContributorEmail = item.top_contributor_email && item.top_contributor_email !== 'N/A';
+                     
+                     if (hasTopContributor && hasTopContributorEmail) {
+                         prioritizedData.push({ ...item, originalIndex: index });
+                     } else {
+                         otherData.push({ ...item, originalIndex: index });
+                     }
+                 });
 
-            // Sort and categorize data based on top contributor and email presence
-            const prioritizedData = [];
-            const otherData = [];
-            
-            data.forEach((item, index) => {
-                const hasTopContributor = item.top_contributor && item.top_contributor !== 'N/A';
-                const hasTopContributorEmail = item.top_contributor_email && item.top_contributor_email !== 'N/A';
-                
-                if (hasTopContributor && hasTopContributorEmail) {
-                    prioritizedData.push({ ...item, originalIndex: index });
-                } else {
-                    otherData.push({ ...item, originalIndex: index });
-                }
-            });
+                 // Display prioritized data first
+                 prioritizedData.forEach((item, index) => {
+                     // Check if this entry has been exported
+                     const entryId = generateEntryId(item);
+                     const isExported = isEntryExported(entryId);
+                     const exportedClass = isExported ? 'exported-entry' : '';
+                     
+                     // Format contact information
+                     const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                     
+                     // Format top contributor information
+                     const topContributorEmail = item.top_contributor_email ? `<a href="mailto:${item.top_contributor_email}" class="email-link">${item.top_contributor_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                     
+                     // Format commit date
+                     const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
+                     
+                     // Format owner info
+                     const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
+                     
+                     tableHTML += `
+                         <tr class="${exportedClass} prioritized-entry">
+                             <td style="text-align: center;">
+                                 <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
+                             </td>
+                             <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
+                             <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
+                             <td>${ownerInfo}</td>
+                             <td>⭐ ${item.stars || 0}</td>
+                             <td>${commitDate}</td>
+                             <td>${item.top_contributor || 'N/A'}</td>
+                             <td>${topContributorEmail}</td>
+                             <td>${email}</td>
+                             <td>${item.description || 'N/A'}</td>
+                         </tr>
+                     `;
+                 });
 
-            let tableHTML = `
-                <div style="margin-top: 1rem;">
-                    <h4>${title} (${data.length} unique repositories)</h4>
-                    <p style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
-                        Showing unique repositories only. Each repository may contain multiple AI marker files.
-                    </p>
-                    <div style="margin-bottom: 1rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
-                            <input type="checkbox" id="selectAll" checked style="width: auto;">
-                            Select All
-                        </label>
-                    </div>
-                    <div class="table-wrapper">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 40px;">✓</th>
-                                    <th>Marker</th>
-                                    <th>Repository</th>
-                                    <th>Owner</th>
-                                    <th>Stars</th>
-                                    <th>Latest Commit</th>
-                                    <th>Top Contributor</th>
-                                    <th>Top Contributor Email</th>
-                                    <th>Email</th>
-                                    <th>Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
+                 // Add show more section if there are other entries
+                 if (otherData.length > 0) {
+                     tableHTML += `
+                         <tr class="show-more-header" style="background: hsl(var(--card-secondary));">
+                             <td colspan="10" style="text-align: center; padding: 1rem;">
+                                 <button id="showMoreBtn" class="btn btn-secondary" style="width: 200px;">
+                                     Show ${otherData.length} More Entries
+                                 </button>
+                                 <div id="showMoreSelectAll" style="display: none; margin-top: 0.5rem;">
+                                     <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: hsl(var(--muted-foreground));">
+                                         <input type="checkbox" id="selectAllOther" style="width: auto;">
+                                         Select All Other Entries
+                                     </label>
+                                 </div>
+                             </td>
+                         </tr>
+                     `;
 
-            // Display prioritized data first
-            prioritizedData.forEach((item, index) => {
-                // Check if this entry has been exported
-                const entryId = generateEntryId(item);
-                const isExported = isEntryExported(entryId);
-                const exportedClass = isExported ? 'exported-entry' : '';
-                
-                // Format contact information
-                const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
-                
-                // Format top contributor information
-                const topContributorEmail = item.top_contributor_email ? `<a href="mailto:${item.top_contributor_email}" class="email-link">${item.top_contributor_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
-                
-                // Format commit date
-                const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
-                
-                // Format owner info
-                const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
-                
-                                    tableHTML += `
-                        <tr class="${exportedClass} prioritized-entry">
-                            <td style="text-align: center;">
-                                <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" checked style="width: auto;">
-                            </td>
-                            <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
-                            <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
-                            <td>${ownerInfo}</td>
-                            <td>⭐ ${item.stars || 0}</td>
-                            <td>${commitDate}</td>
-                            <td>${item.top_contributor || 'N/A'}</td>
-                            <td>${topContributorEmail}</td>
-                            <td>${email}</td>
-                            <td>${item.description || 'N/A'}</td>
-                        </tr>
-                    `;
-            });
-
-            // Add show more section if there are other entries
-            if (otherData.length > 0) {
-                tableHTML += `
+                     // Add hidden other entries
+                     otherData.forEach((item, index) => {
+                         // Check if this entry has been exported
+                         const entryId = generateEntryId(item);
+                         const isExported = isEntryExported(entryId);
+                         const exportedClass = isExported ? 'exported-entry' : '';
+                         
+                         // Format contact information
+                         const email = item.owner_email ? `<a href="mailto:${item.owner_email}" class="email-link">${item.owner_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                         
+                         // Format top contributor information
+                         const topContributorEmail = item.top_contributor_email ? `<a href="mailto:${item.top_contributor_email}" class="email-link">${item.top_contributor_email}</a>` : '<span style="color: hsl(var(--muted-foreground));">N/A</span>';
+                         
+                         // Format commit date
+                         const commitDate = item.latest_commit_date ? new Date(item.latest_commit_date).toLocaleDateString() : 'N/A';
+                         
+                         // Format owner info
+                         const ownerInfo = item.owner_login ? `${item.owner_login} (${item.owner_type || 'N/A'})` : 'N/A';
+                         
+                         tableHTML += `
+                             <tr class="${exportedClass} other-entry" style="display: none;">
+                                 <td style="text-align: center;">
+                                     <input type="checkbox" class="export-checkbox" data-index="${item.originalIndex}" style="width: auto;">
+                                 </td>
+                                 <td><span class="marker-badge">${item.all_markers || item.marker || 'N/A'}</span></td>
+                                 <td><a href="${item.repo_url}" target="_blank" class="repo-link">${item.repo_name}</a></td>
+                                 <td>${ownerInfo}</td>
+                                 <td>⭐ ${item.stars || 0}</td>
+                                 <td>${commitDate}</td>
+                                 <td>${item.top_contributor || 'N/A'}</td>
+                                 <td>${topContributorEmail}</td>
+                                 <td>${email}</td>
+                                 <td>${item.description || 'N/A'}</td>
+                             </tr>
+                         `;
+                     });
+                 }
+             }
+             
+             tableHTML += `
+                 </tbody>
+             </table>
+         </div>
+     </div>
+ `;
+             
+             queryResult.innerHTML = tableHTML;
+             
+             // Add event listeners for checkboxes
+             setupCheckboxHandlers();
+             
+             // Add show more functionality
+             setupShowMoreHandler();
+         }
                     <tr class="show-more-header" style="background: hsl(var(--card-secondary));">
                         <td colspan="10" style="text-align: center; padding: 1rem;">
                             <button id="showMoreBtn" class="btn btn-secondary" style="width: 200px;">
@@ -2369,27 +2416,14 @@
                     `;
                 });
             }
-
-                         tableHTML += `
-                             </tbody>
-                         </table>
-                     </div>
-                     
-                     <!-- Load All Data Button - only show when displaying new data -->
-                     ${title.includes('New Data') ? `
-                         <div style="margin-top: 1rem; text-align: center; padding: 1rem; background: hsl(var(--card-secondary)); border-radius: var(--radius); border: 1px solid hsl(var(--border));">
-                             <p style="margin-bottom: 1rem; color: hsl(var(--muted-foreground)); font-size: 0.875rem;">
-                                 Currently showing only new data from the latest scan. 
-                                 Click below to load all historical data.
-                             </p>
-                             <button class="btn btn-outline" onclick="loadAllData()" id="loadAllDataBtn">
-                                 📊 Load All Data
-                             </button>
-                         </div>
-                     ` : ''}
-                 </div>
-             `;
-
+            
+            tableHTML += `
+                </tbody>
+            </table>
+        </div>
+    </div>
+`;
+            
             queryResult.innerHTML = tableHTML;
             
             // Add event listeners for checkboxes
@@ -2398,19 +2432,19 @@
             // Add show more functionality
             setupShowMoreHandler();
         }
+    }
 
-                 // Setup checkbox handlers for select all functionality
-         function setupCheckboxHandlers() {
+    // Setup checkbox handlers for select all functionality
+    function setupCheckboxHandlers() {
              const selectAllCheckbox = document.getElementById('selectAll');
              const selectAllOtherCheckbox = document.getElementById('selectAllOther');
-             const selectAllHistoricalCheckbox = document.getElementById('selectAllHistorical');
              const exportCheckboxes = document.querySelectorAll('.export-checkbox');
              
-             // Main "Select All" checkbox - affects new data entries (currently shown)
+             // Main "Select All" checkbox - affects prioritized entries (currently shown)
              if (selectAllCheckbox) {
                  selectAllCheckbox.addEventListener('change', function() {
-                     const newDataCheckboxes = document.querySelectorAll('.new-data-entry .export-checkbox');
-                     newDataCheckboxes.forEach(checkbox => {
+                     const prioritizedCheckboxes = document.querySelectorAll('.prioritized-entry .export-checkbox');
+                     prioritizedCheckboxes.forEach(checkbox => {
                          checkbox.checked = this.checked;
                      });
                      updateMainSelectAllState();
@@ -2428,35 +2462,23 @@
                  });
              }
              
-             // "Select All Historical" checkbox - affects historical entries
-             if (selectAllHistoricalCheckbox) {
-                 selectAllHistoricalCheckbox.addEventListener('change', function() {
-                     const historicalCheckboxes = document.querySelectorAll('.historical-entry .export-checkbox');
-                     historicalCheckboxes.forEach(checkbox => {
-                         checkbox.checked = this.checked;
-                     });
-                     updateHistoricalSelectAllState();
-                 });
-             }
-             
              // Update checkboxes when individual checkboxes change
              exportCheckboxes.forEach(checkbox => {
                  checkbox.addEventListener('change', function() {
                      updateMainSelectAllState();
                      updateOtherSelectAllState();
-                     updateHistoricalSelectAllState();
                  });
              });
          }
         
-                 // Update main "Select All" checkbox state based on new data entries
+                 // Update main "Select All" checkbox state based on prioritized entries
          function updateMainSelectAllState() {
              const selectAllCheckbox = document.getElementById('selectAll');
-             const newDataCheckboxes = document.querySelectorAll('.new-data-entry .export-checkbox');
+             const prioritizedCheckboxes = document.querySelectorAll('.prioritized-entry .export-checkbox');
              
-             if (selectAllCheckbox && newDataCheckboxes.length > 0) {
-                 const allChecked = Array.from(newDataCheckboxes).every(cb => cb.checked);
-                 const anyChecked = Array.from(newDataCheckboxes).some(cb => cb.checked);
+             if (selectAllCheckbox && prioritizedCheckboxes.length > 0) {
+                 const allChecked = Array.from(prioritizedCheckboxes).every(cb => cb.checked);
+                 const anyChecked = Array.from(prioritizedCheckboxes).some(cb => cb.checked);
                  
                  selectAllCheckbox.checked = allChecked;
                  selectAllCheckbox.indeterminate = anyChecked && !allChecked;
@@ -2477,19 +2499,7 @@
              }
          }
          
-         // Update "Select All Historical" checkbox state based on historical entries
-         function updateHistoricalSelectAllState() {
-             const selectAllHistoricalCheckbox = document.getElementById('selectAllHistorical');
-             const historicalCheckboxes = document.querySelectorAll('.historical-entry .export-checkbox');
-             
-             if (selectAllHistoricalCheckbox && historicalCheckboxes.length > 0) {
-                 const allChecked = Array.from(historicalCheckboxes).every(cb => cb.checked);
-                 const anyChecked = Array.from(historicalCheckboxes).some(cb => cb.checked);
-                 
-                 selectAllHistoricalCheckbox.checked = allChecked;
-                 selectAllHistoricalCheckbox.indeterminate = anyChecked && !allChecked;
-             }
-         }
+
 
 
 
