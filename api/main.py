@@ -716,7 +716,7 @@ async def run_scraper(request: dict):
         github_token = request.get('github_token')
         backup_tokens = request.get('backup_tokens', [])  # List of backup tokens
         extract_contacts = request.get('extract_contacts', False)  # Default to False for speed
-        max_repos_per_pattern = request.get('max_repos_per_pattern', 10)  # Default to 10 new repos per marker
+        max_repos_per_pattern = request.get('max_repos_per_pattern', 5)  # Default to 5 new repos per marker
         
         if not github_token:
             raise HTTPException(status_code=400, detail="GitHub token is required")
@@ -1012,7 +1012,7 @@ async def run_scraper_fast(request: dict):
         try:
             def run_fast_scraper_operation():
                 return scraper.search_ai_code_generator_files_with_pagination(
-                    max_repos_per_pattern=50,  # Find 50 new repos per marker for fast scraper
+                    max_repos_per_pattern=5,  # Find 5 new repos per marker for fast scraper
                     extract_contacts=False,  # Skip contact extraction for speed
                     min_stars=0  # Include all repos regardless of stars
                 )
